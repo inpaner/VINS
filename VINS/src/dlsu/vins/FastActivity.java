@@ -1,25 +1,24 @@
 package dlsu.vins;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
-import org.opencv.calib3d.Calib3d;
-import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.MatOfDMatch;
 import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.Scalar;
+import org.opencv.features2d.DMatch;
 import org.opencv.features2d.DescriptorExtractor;
 import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
-import org.opencv.features2d.Features2d;
-import org.opencv.features2d.KeyPoint;
-import org.opencv.imgproc.Imgproc;
-import org.opencv.video.KalmanFilter;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -140,6 +139,10 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     Scalar RED = new Scalar(255,0,0);
     Scalar GREEN = new Scalar(0,255,0);
     
+    private List<Mat> descriptors = new LinkedList<>();
+    private List<Mat> images = new LinkedList<>();
+    private int frames = 0;
+    private final int MAX_STATES = 10;
     
     // [Feature Detection] http://stackoverflow.com/q/19808296 
     // [Description + Matching] http://stackoverflow.com/a/16107054
@@ -154,39 +157,58 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         // Do not remove
         
         Mat image = inputFrame.gray();
-        MatOfKeyPoint features = new MatOfKeyPoint();
-        Mat descriptors = new Mat();
-        detector.detect(image, features);
-        descriptor.compute(image, features, descriptors);
-        KeyPoint a = new KeyPoint();
+        MatOfKeyPoint featureMat = new MatOfKeyPoint();
+        Mat descriptorMat = new Mat();
+        detector.detect(image, featureMat);
+        descriptor.compute(image, featureMat, descriptorMat);
+        
+        
+        
+        if (frames < MAX_STATES) {
+            images.add(image);
+            descriptors.add(descriptorMat);
+            frames++;
+            return image;
+        }
         
         Mat outputImage = image.clone();
-        if (prevImage != null) {
-            MatOfDMatch matches = new MatOfDMatch(); 
-            matcher.match(prevDescriptors, descriptors, matches);
+        List<MatOfDMatch> matches = new ArrayList<>();
+        List<DMatch> goodMatches = new ArrayList<>(); 
+        matcher.knnMatch(descriptors.get(0), descriptorMat, matches, 2);
+        int upperLimit = Math.min(descriptors.get(0).rows() - 1, (int) matches.size());
+        
+        for(int i = 0; i < upperLimit; i++) {
+            List<DMatch> dMatches = matches.get(i).toList();
             
-            MatOfByte drawnMatches = new MatOfByte();
-            
-            Log.d("MATCHES", ""+matches.size());
-            
-            //for (int i = 0; i < matches.rows(); i++) {
-            //    Core.circle(gray, features.toList().get(matches.toList().get(i).trainIdx).pt, 8, RED);
-            //}
-            
-            //
-            
-            //Features2d.drawMatches(prevImage, prevFeatures, image, features, matches, 
-            //        outputImg, GREEN, RED, imageOut, Features2d.DRAW_RICH_KEYPOINTS);
-        }    
-            
-        prevDescriptors = descriptors;
-        prevFeatures = features;
-        prevImage = image;
+            if( (int) dMatches.size() <= 2 && (int) dMatches.size() > 0
+                  && dMatches.get(0).distance < 0.6 * (dMatches.get(1).distance) ) {
+                goodMatches.add(dMatches.get(0));
+            }
+        }
+        
+        
+        Log.d("MATCHES", "" + goodMatches.size());
+        
+        
+        
+        //for (int i = 0; i < matches.rows(); i++) {
+        //    Core.circle(gray, features.toList().get(matches.toList().get(i).trainIdx).pt, 8, RED);
+        //}
+        
+        //
+        
+        //Features2d.drawMatches(prevImage, prevFeatures, image, features, matches, 
+        //        outputImg, GREEN, RED, imageOut, Features2d.DRAW_RICH_KEYPOINTS);
         
                 
         //Imgproc.cvtColor(image, mRgba, Imgproc.COLOR_RGBA2RGB,4);
         //Features2d.drawKeypoints(mRgba, features, mRgba, RED, 3);
         
+        images.add(image);
+        descriptors.add(descriptorMat);
+        
+        images.remove(0);
+        descriptors.remove(0);
         
         totalUpdates++;
         return outputImage;
