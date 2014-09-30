@@ -9,13 +9,17 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfKeyPoint;
+import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.core.TermCriteria;
 import org.opencv.features2d.DescriptorExtractor;
 import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
@@ -158,25 +162,34 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         
         Mat image = inputFrame.gray();
         MatOfKeyPoint featureMat = new MatOfKeyPoint();
-        Mat descriptorMat = new Mat();
         detector.detect(image, featureMat);
         
         if (frames < MAX_STATES) {
+            if (featureMat.size().height == 0) {
+                return image;
+                
+            }
             images.add(image);
             features.add(featureMat);
+            Log.d("FEATUREMAT", featureMat.size()+"");
             frames++;
             return image;
         }
         
         MatOfByte status = new MatOfByte();
         MatOfFloat err = new MatOfFloat();
-        MatOfPoint2f prevFeatures = convert(features.get(0));
-        MatOfPoint2f nextFeatures = convert(featureMat);
+        MatOfPoint2f prevFeatures = new MatOfPoint2f();
+        MatOfPoint2f nextFeatures = new MatOfPoint2f();
+        //features.get(0).convertTo(prevFeatures, CvType.CV_32F);
+        prevFeatures = convert(features.get(0));
+        Size size = new Size(31, 31);
+        Log.d("PREV FEATURES", ""+prevFeatures.size());
+        TermCriteria criteria = new TermCriteria(TermCriteria.MAX_ITER|TermCriteria.EPS, 20, 1);
+        //Video.calcOpticalFlowPyrLK(images.get(0), image, prevFeatures, nextFeatures, status, err, size, 3, criteria, Video.OPTFLOW_USE_INITIAL_FLOW, 0.001);
         Video.calcOpticalFlowPyrLK(images.get(0), image, prevFeatures, nextFeatures, status, err);
         Mat outputImage = image.clone();
         
         // Log.d("MATCHES", "" + matches.size());
-        
         
         
         //for (int i = 0; i < matches.rows(); i++) {
