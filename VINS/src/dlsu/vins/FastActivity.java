@@ -1,6 +1,5 @@
 package dlsu.vins;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -12,13 +11,16 @@ import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfDMatch;
+import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfKeyPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
 import org.opencv.core.Scalar;
-import org.opencv.features2d.DMatch;
 import org.opencv.features2d.DescriptorExtractor;
 import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
+import org.opencv.features2d.KeyPoint;
+import org.opencv.video.Video;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -139,10 +141,10 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     Scalar RED = new Scalar(255,0,0);
     Scalar GREEN = new Scalar(0,255,0);
     
-    private List<Mat> descriptors = new LinkedList<>();
+    private List<MatOfKeyPoint> features = new LinkedList<>();
     private List<Mat> images = new LinkedList<>();
     private int frames = 0;
-    private final int MAX_STATES = 10;
+    private final int MAX_STATES = 2;
     
     // [Feature Detection] http://stackoverflow.com/q/19808296 
     // [Description + Matching] http://stackoverflow.com/a/16107054
@@ -151,43 +153,29 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         
         // Do not remove out of the loop. Crashes if not re-instantiated every time.
         // why oh why
-        detector = FeatureDetector.create(FeatureDetector.ORB);
-        descriptor = DescriptorExtractor.create(DescriptorExtractor.ORB);
-        matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
+        detector = FeatureDetector.create(FeatureDetector.FAST);
         // Do not remove
         
         Mat image = inputFrame.gray();
         MatOfKeyPoint featureMat = new MatOfKeyPoint();
         Mat descriptorMat = new Mat();
         detector.detect(image, featureMat);
-        descriptor.compute(image, featureMat, descriptorMat);
-        
-        
         
         if (frames < MAX_STATES) {
             images.add(image);
-            descriptors.add(descriptorMat);
+            features.add(featureMat);
             frames++;
             return image;
         }
         
+        MatOfByte status = new MatOfByte();
+        MatOfFloat err = new MatOfFloat();
+        MatOfPoint2f prevFeatures = convert(features.get(0));
+        MatOfPoint2f nextFeatures = convert(featureMat);
+        Video.calcOpticalFlowPyrLK(images.get(0), image, prevFeatures, nextFeatures, status, err);
         Mat outputImage = image.clone();
-        List<MatOfDMatch> matches = new ArrayList<>();
-        List<DMatch> goodMatches = new ArrayList<>(); 
-        matcher.knnMatch(descriptors.get(0), descriptorMat, matches, 2);
-        int upperLimit = Math.min(descriptors.get(0).rows() - 1, (int) matches.size());
         
-        for(int i = 0; i < upperLimit; i++) {
-            List<DMatch> dMatches = matches.get(i).toList();
-            
-            if( (int) dMatches.size() <= 2 && (int) dMatches.size() > 0
-                  && dMatches.get(0).distance < 0.6 * (dMatches.get(1).distance) ) {
-                goodMatches.add(dMatches.get(0));
-            }
-        }
-        
-        
-        Log.d("MATCHES", "" + goodMatches.size());
+        // Log.d("MATCHES", "" + matches.size());
         
         
         
@@ -205,16 +193,27 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         //Features2d.drawKeypoints(mRgba, features, mRgba, RED, 3);
         
         images.add(image);
-        descriptors.add(descriptorMat);
+        features.add(featureMat);
         
         images.remove(0);
-        descriptors.remove(0);
+        features.remove(0);
         
         totalUpdates++;
         return outputImage;
         
     }
-
+    
+    private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
+        KeyPoint[] keyPointsArray = keyPoints.toArray();
+        Point[] pointsArray = new Point[keyPointsArray.length];
+        
+        for (int i = 0; i < keyPointsArray.length; i++) {
+            pointsArray[i] = (Point) keyPointsArray[i].pt;
+        }
+        
+        return new MatOfPoint2f(pointsArray);
+    }
+    
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         
