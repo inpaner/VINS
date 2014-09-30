@@ -171,7 +171,6 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
             }
             images.add(image);
             features.add(featureMat);
-            Log.d("FEATUREMAT", featureMat.size()+"");
             frames++;
             return image;
         }
@@ -180,14 +179,11 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         MatOfFloat err = new MatOfFloat();
         MatOfPoint2f prevFeatures = new MatOfPoint2f();
         MatOfPoint2f nextFeatures = new MatOfPoint2f();
-        //features.get(0).convertTo(prevFeatures, CvType.CV_32F);
         prevFeatures = convert(features.get(0));
-        Size size = new Size(31, 31);
-        Log.d("PREV FEATURES", ""+prevFeatures.size());
-        TermCriteria criteria = new TermCriteria(TermCriteria.MAX_ITER|TermCriteria.EPS, 20, 1);
-        //Video.calcOpticalFlowPyrLK(images.get(0), image, prevFeatures, nextFeatures, status, err, size, 3, criteria, Video.OPTFLOW_USE_INITIAL_FLOW, 0.001);
         Video.calcOpticalFlowPyrLK(images.get(0), image, prevFeatures, nextFeatures, status, err);
         Mat outputImage = image.clone();
+        
+        
         
         // Log.d("MATCHES", "" + matches.size());
         
