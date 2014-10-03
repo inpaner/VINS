@@ -10,17 +10,28 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.calib3d.Calib3d;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfDMatch;
+import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfKeyPoint;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
 import org.opencv.core.Scalar;
-import org.opencv.features2d.DMatch;
+import org.opencv.core.Size;
+import org.opencv.core.TermCriteria;
 import org.opencv.features2d.DescriptorExtractor;
 import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
+import org.opencv.features2d.Features2d;
+import org.opencv.features2d.KeyPoint;
+import org.opencv.video.Video;
 
 import android.app.Activity;
+import android.graphics.Canvas;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -33,9 +44,6 @@ import android.widget.TextView;
 public class FastActivity extends Activity implements CvCameraViewListener2 {
     private static final String TAG = "Fast Activity";
     private FeatureDetector detector;
-    private DescriptorExtractor descriptor;
-    private DescriptorMatcher matcher;
-    
     
     private CameraBridgeViewBase mOpenCvCameraView;
     private TextView textBox;
@@ -48,6 +56,10 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
                 case LoaderCallbackInterface.SUCCESS: {
                     Log.i(TAG, "OpenCV loaded successfully");
                     mOpenCvCameraView.enableView();
+                    prevFeatures = new MatOfPoint2f();
+                    prevImage = new Mat();
+                    detector = FeatureDetector.create(FeatureDetector.FAST);
+                    
                 } break;
                 default: {
                     super.onManagerConnected(status);
@@ -73,31 +85,14 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         textBox = (TextView) findViewById(R.id.counter);
         
         // http://stackoverflow.com/a/17872107
-        
         //mOpenCvCameraView.setMaxFrameSize(720, 1280); // sets to 720 x 480
         mOpenCvCameraView.setMaxFrameSize(400, 1280); // sets to 320 x 240
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         
         mOpenCvCameraView.setCvCameraViewListener(this);
-        
-        textBox.setText("wadup");
-        
-        //createUpdater();
     }
     
     // http://stackoverflow.com/a/7433510
-    private void createUpdater() {
-        final Handler handler = new Handler();
-        Runnable task = new Runnable() {
-            @Override
-            public void run() {
-                updateFPS();
-                handler.postDelayed(this, 1000);
-            }
-        };
-        handler.removeCallbacks(task);
-        handler.post(task);
-    }
     
     private void updateFPS() {
         textBox.setText("FPS: " + totalUpdates);
@@ -132,89 +127,95 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     public void onCameraViewStopped() {
     }
     
-    private Mat prevDescriptors;
-    private MatOfKeyPoint prevFeatures;
+    private MatOfPoint2f prevFeatures;
     private Mat prevImage;
+    private Mat drawMask;
     
-    Scalar RED = new Scalar(255,0,0);
-    Scalar GREEN = new Scalar(0,255,0);
+    private final Scalar RED = new Scalar(255,0,0);
+    private final Scalar GREEN = new Scalar(0,255,0);
+    private final Scalar BLACK = new Scalar(0);
+    private final Scalar WHITE = new Scalar(255);
     
-    private List<Mat> descriptors = new LinkedList<>();
-    private List<Mat> images = new LinkedList<>();
     private int frames = 0;
-    private final int MAX_STATES = 10;
+    private int detectInterval = 5;
     
-    // [Feature Detection] http://stackoverflow.com/q/19808296 
-    // [Description + Matching] http://stackoverflow.com/a/16107054
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Log.d("VINS", "onCameraFrame");
         
-        // Do not remove out of the loop. Crashes if not re-instantiated every time.
-        // why oh why
-        detector = FeatureDetector.create(FeatureDetector.ORB);
-        descriptor = DescriptorExtractor.create(DescriptorExtractor.ORB);
-        matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
-        // Do not remove
-        
         Mat image = inputFrame.gray();
-        MatOfKeyPoint featureMat = new MatOfKeyPoint();
-        Mat descriptorMat = new Mat();
-        detector.detect(image, featureMat);
-        descriptor.compute(image, featureMat, descriptorMat);
         
+        Mat modifiedImage = image.clone();
+        Mat detectMask = image.clone();
+        detectMask.setTo(WHITE);
         
-        
-        if (frames < MAX_STATES) {
-            images.add(image);
-            descriptors.add(descriptorMat);
-            frames++;
-            return image;
+        if (prevFeatures.size().height > 0) {
+            MatOfByte status = new MatOfByte();
+            MatOfFloat err = new MatOfFloat();
+            MatOfPoint2f nextFeatures = new MatOfPoint2f();
+            Video.calcOpticalFlowPyrLK(prevImage, image, prevFeatures, nextFeatures, status, err);
+            
+            List<Point> oldPoints = prevFeatures.toList();
+            List<Point> newPoints = nextFeatures.toList();
+            List<Point> goodOldList = new ArrayList<>();
+            List<Point> goodNewList = new ArrayList<>();
+            List<Integer> badPointsIndex = new ArrayList<>();
+            int i = 0;
+            Mat imageLines = image.clone();
+            for (Byte item : status.toList()) {
+                if (item.intValue() == 1) {
+                    goodOldList.add(oldPoints.get(i));
+                    goodNewList.add(newPoints.get(i));
+                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1); // mask out during detection        
+                    Core.line(drawMask, oldPoints.get(i), newPoints.get(i), WHITE, 1);
+                    Core.circle(imageLines, newPoints.get(i), 2, RED, -1);
+                }
+                else {
+                    badPointsIndex.add(Integer.valueOf(i));
+                }
+                i++;
+            }
+            Core.add(imageLines, drawMask, modifiedImage);
+            MatOfPoint2f goodOld = new MatOfPoint2f();
+            MatOfPoint2f goodNew = new MatOfPoint2f();
+            goodOld.fromList(goodOldList);
+            goodNew.fromList(goodNewList);
+            
+            goodNew.copyTo(prevFeatures);
+            Log.d("Prev", goodOld.size() + "");
         }
         
-        Mat outputImage = image.clone();
-        List<MatOfDMatch> matches = new ArrayList<>();
-        List<DMatch> goodMatches = new ArrayList<>(); 
-        matcher.knnMatch(descriptors.get(0), descriptorMat, matches, 2);
-        int upperLimit = Math.min(descriptors.get(0).rows() - 1, (int) matches.size());
-        
-        for(int i = 0; i < upperLimit; i++) {
-            List<DMatch> dMatches = matches.get(i).toList();
-            
-            if( (int) dMatches.size() <= 2 && (int) dMatches.size() > 0
-                  && dMatches.get(0).distance < 0.6 * (dMatches.get(1).distance) ) {
-                goodMatches.add(dMatches.get(0));
+        if (frames % detectInterval == 0) {
+            MatOfKeyPoint featureMat = new MatOfKeyPoint();
+            detector.detect(image, featureMat, detectMask);
+            if (featureMat.size().height > 0) {
+                MatOfPoint2f newFeatures = convert(featureMat);
+                prevFeatures.push_back(newFeatures);
             }
         }
         
+        // resets the tracks after a while, else screen will be all white
+        if (frames % (detectInterval * 5) == 0) {
+            drawMask = image.clone();
+            drawMask.setTo(BLACK);
+        }
         
-        Log.d("MATCHES", "" + goodMatches.size());
-        
-        
-        
-        //for (int i = 0; i < matches.rows(); i++) {
-        //    Core.circle(gray, features.toList().get(matches.toList().get(i).trainIdx).pt, 8, RED);
-        //}
-        
-        //
-        
-        //Features2d.drawMatches(prevImage, prevFeatures, image, features, matches, 
-        //        outputImg, GREEN, RED, imageOut, Features2d.DRAW_RICH_KEYPOINTS);
-        
-                
-        //Imgproc.cvtColor(image, mRgba, Imgproc.COLOR_RGBA2RGB,4);
-        //Features2d.drawKeypoints(mRgba, features, mRgba, RED, 3);
-        
-        images.add(image);
-        descriptors.add(descriptorMat);
-        
-        images.remove(0);
-        descriptors.remove(0);
-        
-        totalUpdates++;
-        return outputImage;
-        
+        frames++;
+        image.copyTo(prevImage);
+        Log.d("Next", prevFeatures.size() + "");
+        return modifiedImage;
     }
-
+    
+    private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
+        KeyPoint[] keyPointsArray = keyPoints.toArray();
+        Point[] pointsArray = new Point[keyPointsArray.length];
+        
+        for (int i = 0; i < keyPointsArray.length; i++) {
+            pointsArray[i] = (Point) keyPointsArray[i].pt;
+        }
+        
+        return new MatOfPoint2f(pointsArray);
+    }
+    
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         
