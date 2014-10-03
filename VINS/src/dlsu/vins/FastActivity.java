@@ -10,6 +10,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
@@ -28,6 +29,7 @@ import org.opencv.features2d.KeyPoint;
 import org.opencv.video.Video;
 
 import android.app.Activity;
+import android.graphics.Canvas;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -52,6 +54,9 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
                 case LoaderCallbackInterface.SUCCESS: {
                     Log.i(TAG, "OpenCV loaded successfully");
                     mOpenCvCameraView.enableView();
+                    prevFeatures = new MatOfPoint2f();
+                    detector = FeatureDetector.create(FeatureDetector.FAST);
+                    
                 } break;
                 default: {
                     super.onManagerConnected(status);
@@ -82,24 +87,9 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         
         mOpenCvCameraView.setCvCameraViewListener(this);
-        textBox.setText("wadup");
-        
-        //createUpdater();
     }
     
     // http://stackoverflow.com/a/7433510
-    private void createUpdater() {
-        final Handler handler = new Handler();
-        Runnable task = new Runnable() {
-            @Override
-            public void run() {
-                updateFPS();
-                handler.postDelayed(this, 1000);
-            }
-        };
-        handler.removeCallbacks(task);
-        handler.post(task);
-    }
     
     private void updateFPS() {
         textBox.setText("FPS: " + totalUpdates);
@@ -135,94 +125,71 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     }
     
     private MatOfPoint2f prevFeatures;
+    private Mat prevImage;
     
     Scalar RED = new Scalar(255,0,0);
     Scalar GREEN = new Scalar(0,255,0);
+    Scalar BLACK = new Scalar(0);
+    Scalar WHITE = new Scalar(255);
     
-    private List<MatOfKeyPoint> features = new LinkedList<>();
-    private List<Mat> images = new LinkedList<>();
     private int frames = 0;
-    private final int MAX_STATES = 1;
+    private int detectInterval = 5;
     
-    // [Feature Detection] http://stackoverflow.com/q/19808296 
-    // [Description + Matching] http://stackoverflow.com/a/16107054
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Log.d("VINS", "onCameraFrame");
         
-        // Do not remove out of the loop. Crashes if not re-instantiated every time.
-        detector = FeatureDetector.create(FeatureDetector.FAST);
-        
         Mat image = inputFrame.gray();
-        MatOfKeyPoint featureMat = new MatOfKeyPoint();
-        detector.detect(image, featureMat);
+        Mat detectMask = image.clone();
+        detectMask.setTo(WHITE);
         
-        if (frames < MAX_STATES) {
-            if (featureMat.size().height == 0) {
-                return image;        
-            }
-            images.add(image);
-            features.add(featureMat);
-            frames++;
-            prevFeatures = convert(featureMat);
+        if (prevFeatures.size().height > 0) {
+            MatOfByte status = new MatOfByte();
+            MatOfFloat err = new MatOfFloat();
+            MatOfPoint2f nextFeatures = new MatOfPoint2f();
+            Video.calcOpticalFlowPyrLK(prevImage, image, prevFeatures, nextFeatures, status, err);
             
-            return image;
-        }
-        
-        MatOfByte status = new MatOfByte();
-        MatOfFloat err = new MatOfFloat();
-        MatOfPoint2f nextFeatures = new MatOfPoint2f();
-        Video.calcOpticalFlowPyrLK(images.get(0), image, prevFeatures, nextFeatures, status, err);
-        Mat outputImage = image.clone();
-        
-        
-        List<Point> oldPoints = prevFeatures.toList();
-        List<Point> newPoints = nextFeatures.toList();
-        List<Point> goodOldList = new ArrayList<>();
-        List<Point> goodNewList = new ArrayList<>();
-        
-        
-        int i = 0;
-        for (Byte item : status.toList()) {
-            if (item.intValue() == 1) {
-                goodOldList.add(oldPoints.get(i));
-                goodNewList.add(newPoints.get(i));
+            List<Point> oldPoints = prevFeatures.toList();
+            List<Point> newPoints = nextFeatures.toList();
+            List<Point> goodOldList = new ArrayList<>();
+            List<Point> goodNewList = new ArrayList<>();
+            List<Integer> badPointsIndex = new ArrayList<>();
+            
+            int i = 0;
+            for (Byte item : status.toList()) {
+                if (item.intValue() == 1) {
+                    goodOldList.add(oldPoints.get(i));
+                    goodNewList.add(newPoints.get(i));
+                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1);
+                }
+                else {
+                    badPointsIndex.add(Integer.valueOf(i));
+                }
+                i++;
             }
-            i++;
+            
+            MatOfPoint2f goodOld = new MatOfPoint2f();
+            MatOfPoint2f goodNew = new MatOfPoint2f();
+            goodOld.fromList(goodOldList);
+            goodNew.fromList(goodNewList);
+            
+            prevFeatures = goodNew;
+            Log.d("Prev", goodOld.size() + "");
         }
         
-        MatOfPoint2f goodOld = new MatOfPoint2f();
-        MatOfPoint2f goodNew = new MatOfPoint2f();
-        goodOld.fromList(goodOldList);
-        goodNew.fromList(goodNewList);
-                
-        prevFeatures = goodNew;
-        
-        
-        Log.d("good prev, next features", "" + goodOld.size() + ", " + goodNew.size());
-        //Log.d("status", status.dump());
-        
-        //for (int i = 0; i < matches.rows(); i++) {
-        //    Core.circle(gray, features.toList().get(matches.toList().get(i).trainIdx).pt, 8, RED);
-        //}
-        
-        //
-        
-        //Features2d.drawMatches(prevImage, prevFeatures, image, features, matches, 
-        //        outputImg, GREEN, RED, imageOut, Features2d.DRAW_RICH_KEYPOINTS);
-        
-                
-        //Imgproc.cvtColor(image, mRgba, Imgproc.COLOR_RGBA2RGB,4);
-        //Features2d.drawKeypoints(mRgba, features, mRgba, RED, 3);
-        
-        images.add(image);
-        features.add(featureMat);
-        
-        images.remove(0);
-        features.remove(0);
-        
-        totalUpdates++;
-        return outputImage;
-        
+        if (frames % detectInterval == 0) {
+            // Do not remove out of the loop. Crashes if not re-instantiated every time.
+            
+            MatOfKeyPoint featureMat = new MatOfKeyPoint();
+            detector.detect(image, featureMat, detectMask);
+            if (featureMat.size().height > 0) {
+                MatOfPoint2f newFeatures = convert(featureMat);
+                prevFeatures.push_back(newFeatures);
+            }
+        }
+        frames++;
+        prevImage = image;
+        Log.d("Next", prevFeatures.size() + "");
+        return image;
     }
     
     private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
