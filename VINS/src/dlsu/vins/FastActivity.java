@@ -1,5 +1,6 @@
 package dlsu.vins;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -39,9 +40,6 @@ import android.widget.TextView;
 public class FastActivity extends Activity implements CvCameraViewListener2 {
     private static final String TAG = "Fast Activity";
     private FeatureDetector detector;
-    private DescriptorExtractor descriptor;
-    private DescriptorMatcher matcher;
-    
     
     private CameraBridgeViewBase mOpenCvCameraView;
     private TextView textBox;
@@ -79,13 +77,11 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         textBox = (TextView) findViewById(R.id.counter);
         
         // http://stackoverflow.com/a/17872107
-        
         //mOpenCvCameraView.setMaxFrameSize(720, 1280); // sets to 720 x 480
         mOpenCvCameraView.setMaxFrameSize(400, 1280); // sets to 320 x 240
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         
         mOpenCvCameraView.setCvCameraViewListener(this);
-        
         textBox.setText("wadup");
         
         //createUpdater();
@@ -138,9 +134,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     public void onCameraViewStopped() {
     }
     
-    private Mat prevDescriptors;
-    private MatOfKeyPoint prevFeatures;
-    private Mat prevImage;
+    private MatOfPoint2f prevFeatures;
     
     Scalar RED = new Scalar(255,0,0);
     Scalar GREEN = new Scalar(0,255,0);
@@ -148,7 +142,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     private List<MatOfKeyPoint> features = new LinkedList<>();
     private List<Mat> images = new LinkedList<>();
     private int frames = 0;
-    private final int MAX_STATES = 2;
+    private final int MAX_STATES = 1;
     
     // [Feature Detection] http://stackoverflow.com/q/19808296 
     // [Description + Matching] http://stackoverflow.com/a/16107054
@@ -156,9 +150,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         Log.d("VINS", "onCameraFrame");
         
         // Do not remove out of the loop. Crashes if not re-instantiated every time.
-        // why oh why
         detector = FeatureDetector.create(FeatureDetector.FAST);
-        // Do not remove
         
         Mat image = inputFrame.gray();
         MatOfKeyPoint featureMat = new MatOfKeyPoint();
@@ -166,27 +158,48 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         
         if (frames < MAX_STATES) {
             if (featureMat.size().height == 0) {
-                return image;
-                
+                return image;        
             }
             images.add(image);
             features.add(featureMat);
             frames++;
+            prevFeatures = convert(featureMat);
+            
             return image;
         }
         
         MatOfByte status = new MatOfByte();
         MatOfFloat err = new MatOfFloat();
-        MatOfPoint2f prevFeatures = new MatOfPoint2f();
         MatOfPoint2f nextFeatures = new MatOfPoint2f();
-        prevFeatures = convert(features.get(0));
         Video.calcOpticalFlowPyrLK(images.get(0), image, prevFeatures, nextFeatures, status, err);
         Mat outputImage = image.clone();
         
         
+        List<Point> oldPoints = prevFeatures.toList();
+        List<Point> newPoints = nextFeatures.toList();
+        List<Point> goodOldList = new ArrayList<>();
+        List<Point> goodNewList = new ArrayList<>();
         
-        // Log.d("MATCHES", "" + matches.size());
         
+        int i = 0;
+        for (Byte item : status.toList()) {
+            if (item.intValue() == 1) {
+                goodOldList.add(oldPoints.get(i));
+                goodNewList.add(newPoints.get(i));
+            }
+            i++;
+        }
+        
+        MatOfPoint2f goodOld = new MatOfPoint2f();
+        MatOfPoint2f goodNew = new MatOfPoint2f();
+        goodOld.fromList(goodOldList);
+        goodNew.fromList(goodNewList);
+                
+        prevFeatures = goodNew;
+        
+        
+        Log.d("good prev, next features", "" + goodOld.size() + ", " + goodNew.size());
+        //Log.d("status", status.dump());
         
         //for (int i = 0; i < matches.rows(); i++) {
         //    Core.circle(gray, features.toList().get(matches.toList().get(i).trainIdx).pt, 8, RED);
