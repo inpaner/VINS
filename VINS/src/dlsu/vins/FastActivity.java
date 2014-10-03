@@ -126,11 +126,12 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     
     private MatOfPoint2f prevFeatures;
     private Mat prevImage;
+    private Mat drawMask;
     
-    Scalar RED = new Scalar(255,0,0);
-    Scalar GREEN = new Scalar(0,255,0);
-    Scalar BLACK = new Scalar(0);
-    Scalar WHITE = new Scalar(255);
+    private final Scalar RED = new Scalar(255,0,0);
+    private final Scalar GREEN = new Scalar(0,255,0);
+    private final Scalar BLACK = new Scalar(0);
+    private final Scalar WHITE = new Scalar(255);
     
     private int frames = 0;
     private int detectInterval = 5;
@@ -141,6 +142,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         Mat image = inputFrame.gray();
         Mat detectMask = image.clone();
         detectMask.setTo(WHITE);
+        
         
         if (prevFeatures.size().height > 0) {
             MatOfByte status = new MatOfByte();
@@ -155,22 +157,27 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
             List<Integer> badPointsIndex = new ArrayList<>();
             
             int i = 0;
+            Mat imageLines = image.clone();
             for (Byte item : status.toList()) {
                 if (item.intValue() == 1) {
                     goodOldList.add(oldPoints.get(i));
                     goodNewList.add(newPoints.get(i));
-                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1);
+                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1); // mask out during detection
+                    
+                    Core.line(drawMask, oldPoints.get(i), newPoints.get(i), WHITE, 1);
+                    Core.circle(imageLines, oldPoints.get(i), 2, RED, -1);
                 }
                 else {
                     badPointsIndex.add(Integer.valueOf(i));
                 }
                 i++;
             }
-            
+            Core.add(imageLines, drawMask, image);
             MatOfPoint2f goodOld = new MatOfPoint2f();
             MatOfPoint2f goodNew = new MatOfPoint2f();
             goodOld.fromList(goodOldList);
             goodNew.fromList(goodNewList);
+            
             
             prevFeatures = goodNew;
             Log.d("Prev", goodOld.size() + "");
@@ -186,6 +193,13 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
                 prevFeatures.push_back(newFeatures);
             }
         }
+        
+        // resets the tracks after a while, else screen will be all white
+        if (frames % (detectInterval * 5) == 0) {
+            drawMask = image.clone();
+            drawMask.setTo(BLACK);
+        }
+        
         frames++;
         prevImage = image;
         Log.d("Next", prevFeatures.size() + "");
