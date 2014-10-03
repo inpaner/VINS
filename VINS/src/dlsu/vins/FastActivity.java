@@ -10,6 +10,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -25,6 +26,7 @@ import org.opencv.core.TermCriteria;
 import org.opencv.features2d.DescriptorExtractor;
 import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
+import org.opencv.features2d.Features2d;
 import org.opencv.features2d.KeyPoint;
 import org.opencv.video.Video;
 
@@ -55,6 +57,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
                     Log.i(TAG, "OpenCV loaded successfully");
                     mOpenCvCameraView.enableView();
                     prevFeatures = new MatOfPoint2f();
+                    prevImage = new Mat();
                     detector = FeatureDetector.create(FeatureDetector.FAST);
                     
                 } break;
@@ -140,9 +143,10 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         Log.d("VINS", "onCameraFrame");
         
         Mat image = inputFrame.gray();
+        
+        Mat modifiedImage = image.clone();
         Mat detectMask = image.clone();
         detectMask.setTo(WHITE);
-        
         
         if (prevFeatures.size().height > 0) {
             MatOfByte status = new MatOfByte();
@@ -155,37 +159,32 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
             List<Point> goodOldList = new ArrayList<>();
             List<Point> goodNewList = new ArrayList<>();
             List<Integer> badPointsIndex = new ArrayList<>();
-            
             int i = 0;
             Mat imageLines = image.clone();
             for (Byte item : status.toList()) {
                 if (item.intValue() == 1) {
                     goodOldList.add(oldPoints.get(i));
                     goodNewList.add(newPoints.get(i));
-                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1); // mask out during detection
-                    
+                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1); // mask out during detection        
                     Core.line(drawMask, oldPoints.get(i), newPoints.get(i), WHITE, 1);
-                    Core.circle(imageLines, oldPoints.get(i), 2, RED, -1);
+                    Core.circle(imageLines, newPoints.get(i), 2, RED, -1);
                 }
                 else {
                     badPointsIndex.add(Integer.valueOf(i));
                 }
                 i++;
             }
-            Core.add(imageLines, drawMask, image);
+            Core.add(imageLines, drawMask, modifiedImage);
             MatOfPoint2f goodOld = new MatOfPoint2f();
             MatOfPoint2f goodNew = new MatOfPoint2f();
             goodOld.fromList(goodOldList);
             goodNew.fromList(goodNewList);
             
-            
-            prevFeatures = goodNew;
+            goodNew.copyTo(prevFeatures);
             Log.d("Prev", goodOld.size() + "");
         }
         
         if (frames % detectInterval == 0) {
-            // Do not remove out of the loop. Crashes if not re-instantiated every time.
-            
             MatOfKeyPoint featureMat = new MatOfKeyPoint();
             detector.detect(image, featureMat, detectMask);
             if (featureMat.size().height > 0) {
@@ -201,9 +200,9 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         }
         
         frames++;
-        prevImage = image;
+        image.copyTo(prevImage);
         Log.d("Next", prevFeatures.size() + "");
-        return image;
+        return modifiedImage;
     }
     
     private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
