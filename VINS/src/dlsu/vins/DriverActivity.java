@@ -3,6 +3,7 @@ package dlsu.vins;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import motionestimation.SensorEntry;
 import android.app.Activity;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
