@@ -1,5 +1,6 @@
 package ekf;
 import java.util.ArrayList;
+import java.util.Random;
 
 import motionestimation.DevicePose;
 import Jama.Matrix;
@@ -9,9 +10,17 @@ public class EKF{
     private ArrayList<ArrayList<Double>> P; // Covariance Matrix
     private int numFeatures;
         
+    private Matrix jrMatrix;
+    private Matrix jzMatrix;
+    private Matrix vrvMatrix;
+    
+    
     public EKF(){
 	X = createX();
 	P = createP();
+	
+	jrMatrix = this.createJRMatrix(0, 0);
+	jzMatrix = this.createJZMatrix(0, 0, 0);
     }
     
     public ArrayList<ArrayList<Double>> getP(){
@@ -74,6 +83,10 @@ public class EKF{
 	    	for(int k=0;k<Pri[j].length;k++)
 	    	    P.get(j).set(k, Pri[j][k]);
 	}   
+	
+	//Update Jr and Jz matrices
+	jrMatrix = this.createJRMatrix(displacementX, displacementY);
+	jzMatrix = this.createJZMatrix(displacementX, displacementY, headingRadians);
     }
     
     private double[][] extractPri(ArrayList<ArrayList<Double>> P, int index){
@@ -141,12 +154,7 @@ public class EKF{
 	Matrix pMatrix = new Matrix((double[][])P.toArray());
 	Matrix hphMatrix = hMatrix.times(pMatrix).times(hMatrix.transpose());
 	
-	double[][] vrv = new double[2][2];
-	//this should be r*c, where c is a gaussian with a variance of 0.01. i don't know how that translates to code
-	vrv[0][0] = r*0.01; 
-	vrv[1][1] = 1; 
-	Matrix vrvMatrix = new Matrix(vrv);
-	
+	vrvMatrix = this.createVRVMatrix(r);
 	Matrix innovationMatrix = hphMatrix.plus(vrvMatrix);
 	
 	Matrix kalmanGainMatrix = pMatrix.times(hMatrix.transpose()).times(innovationMatrix.inverse());
@@ -176,6 +184,16 @@ public class EKF{
 	for(int i=0; i<x.length;i++)
 	    X.add(x[i][0]);
 	    
+    }
+    
+    private Matrix createVRVMatrix(double distance){
+	Random rand = new Random();
+	
+	double[][] vrv = new double[2][2];
+	//this should be r*c, where c is a gaussian with a variance of 0.01. i don't know how that translates to code
+	vrv[0][0] = distance*rand.nextGaussian(); 
+	vrv[1][1] = 1; 
+	return new Matrix(vrv);	
     }
     
     private Matrix createStateVectorMatrix(){
@@ -226,18 +244,78 @@ public class EKF{
 	
 	//add to covariance matrix
 	//add 2 rows, then add two columns at the end
-	for(int i=0; i<P.size(); i++){
-	    for(int j=0;j<2;j++)
-		P.get(i).add(0.0); //initial covariance = 0
+
+	Matrix pPhiMatrix = new Matrix(this.extractPPhi(P));
+	
+
+	ArrayList<Matrix> toAdd = new ArrayList<Matrix>();
+	
+	//P^phi * Jxr^T
+	Matrix lowerLeftMatrix = pPhiMatrix.times(jrMatrix.transpose()); // this is lower left. add it to P later on	
+	
+	toAdd.add(lowerLeftMatrix);
+	
+	for(int i=0;i<numFeatures;i++){
+	    Matrix subMatrix = this.extractSubMatrix(3 + i*2, 4 + i*2, 0, 2);
+	    Matrix currMatrix = jrMatrix.times(subMatrix);
+	    toAdd.add(currMatrix);
 	}
 	
-	for(int i=0;i<2;i++){
-	    ArrayList<Double> newRow = new ArrayList<Double>();
-	    int cols = 3 + numFeatures * 2;
-	    for(int j=0;j<cols;j++)
-		newRow.add(0.0);
-	    P.add(newRow);
+	//This part adds the new 2 columns
+	for(int i=0, row = 0; i<toAdd.size(); i++){
+	    Matrix transpose = toAdd.get(i).transpose();
+	    
+	    for(int j=0;j<transpose.getRowDimension();j++){
+		for(int k=0;k<transpose.getColumnDimension();k++){
+		    P.get(row).add(transpose.get(j,k));
+		}
+		row++;
+	    }
 	}
+	
+	Matrix lowerRightMatrix = jrMatrix.times(pPhiMatrix).times(jrMatrix.transpose()).plus(jzMatrix.times(vrvMatrix).times(jzMatrix.transpose()));
+	toAdd.add(lowerRightMatrix);
+
+	//This part adds the last 2 rows
+	for(int i=0;i<2;i++){
+	    ArrayList<Double> currRow = new ArrayList<Double>();
+	    
+	    for(Matrix matrix: toAdd){
+		for(int j=0; j<matrix.getColumnDimension();j++)
+		    currRow.add(matrix.get(i, j));
+	    }
+	    
+	    P.add(currRow);
+	}
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+    }
+    
+    private Matrix extractSubMatrix(int startRow, int endRow, int startCol, int endCol){
+	double[][] sub = new double[endRow-startRow+1][endCol-startCol+1];
+	for(int i=startRow; i<=endRow; i++)
+	    for(int j=startCol; j<=endCol; j++)
+		sub[i-startRow][j-startCol] = P.get(i).get(j);
+	 return new Matrix(sub);
+    }
+    
+    private Matrix createJRMatrix(double displacementX, double displacementY){
+	double[][] jr = {{1, 0, -1*displacementY}, {0, 1, displacementX}};
+	return new Matrix(jr);
+    }
+    
+    private Matrix createJZMatrix(double displacementX, double displacementY, double headingRadians){
+	double[][] jz = {{Math.cos(headingRadians), -1*displacementY}, {Math.sin(headingRadians), displacementX}};
+	return new Matrix(jz);
     }
     
     /********** Initializations **********/

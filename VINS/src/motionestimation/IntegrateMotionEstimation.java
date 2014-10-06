@@ -14,9 +14,9 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 	ArrayList<Double> accz = new ArrayList<Double>();
 	
 	// gyroscope data
-	ArrayList<Double> gyrx = new ArrayList<Double>();
-	ArrayList<Double> gyry = new ArrayList<Double>();
-	ArrayList<Double> gyrz = new ArrayList<Double>();
+	ArrayList<Double> orientx = new ArrayList<Double>();
+	ArrayList<Double> orienty = new ArrayList<Double>();
+	ArrayList<Double> orientz = new ArrayList<Double>();
 	
 	// overflow data, add when next time
 	ArrayList<Double> overflow = new ArrayList<Double>();
@@ -33,17 +33,17 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 			accy.add(s.getAcc_y());
 			accz.add(s.getAcc_z());
 			
-			gyrx.add(s.getGyro_x());
-			gyry.add(s.getGyro_y());
-			gyrz.add(s.getGyro_z());
+			orientx.add(s.getOrient_x());
+			orienty.add(s.getOrient_y());
+			orientz.add(s.getOrient_z());
 		}
 		else {
 			overflow.add(s.getAcc_x());
 			overflow.add(s.getAcc_y());
 			overflow.add(s.getAcc_z());
-			overflow.add(s.getGyro_x());
-			overflow.add(s.getGyro_y());
-			overflow.add(s.getGyro_z());
+			overflow.add(s.getOrient_x());
+			overflow.add(s.getOrient_y());
+			overflow.add(s.getOrient_z());
 		}
 	}
 	
@@ -64,9 +64,9 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		pos[2] *= (curr-start)*(curr-start)/4000.0;
 		
 		// average all the gyroscope readings
-		int numInstances = gyrx.size();
+		int numInstances = orientx.size();
 		double heading = 0;
-		for (Double d : gyrx)
+		for (Double d : orientx)
 			heading += d;
 		
 		if(numInstances != 0)
@@ -76,18 +76,18 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		accx.clear();
 		accy.clear();
 		accz.clear();
-		gyrx.clear();
-		gyry.clear();
-		gyrz.clear();
+		orientx.clear();
+		orienty.clear();
+		orientz.clear();
 		
 		// if there are overflows
 		for (int i = 0; i < overflow.size(); i += 6) {
 			accx.add(overflow.get(i));
 			accy.add(overflow.get(i+1));
 			accz.add(overflow.get(i+2));
-			gyrx.add(overflow.get(i+3));
-			gyry.add(overflow.get(i+4));
-			gyrz.add(overflow.get(i+5));
+			orientx.add(overflow.get(i+3));
+			orienty.add(overflow.get(i+4));
+			orientz.add(overflow.get(i+5));
 		}
 		
 		overflow.clear();
