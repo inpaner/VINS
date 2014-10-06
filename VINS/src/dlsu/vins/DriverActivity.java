@@ -75,7 +75,7 @@ public class DriverActivity extends Activity implements SensorEventListener{
     }
     
     private void recordSensorEntry(){
-	//motionestimation.inputData(nextSensorEntryToAdd);
+	motionEstimator.inputData(nextSensorEntryToAdd);
 	nextSensorEntryToAdd = new SensorEntry();
     }
 
