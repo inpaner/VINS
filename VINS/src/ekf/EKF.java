@@ -1,6 +1,7 @@
 package ekf;
 import java.util.ArrayList;
 
+import motionestimation.DevicePose;
 import Jama.Matrix;
 public class EKF{
 
@@ -13,6 +14,16 @@ public class EKF{
 	P = createP();
     }
     
+    
+    public DevicePose getCurrDevicePose(){
+	PointDouble deviceCoords = getDeviceCoords();
+	DevicePose pose = new DevicePose(deviceCoords.getX(), deviceCoords.getY(), 0, getHeading());
+	return pose;
+    }
+    
+    private double getHeading(){
+	return X.get(2);
+    }
     
     /********** INS Update **********/
     
@@ -42,7 +53,7 @@ public class EKF{
 	double[][] A = createA(displacementX, displacementY); // Jacobian of Prediction Model
 	Matrix aMatrix = new Matrix(A);
 	
-	// pPhi = A * pPphi * A + Q
+	// pPhi = A * pPphi * A^T + Q
 	pPhi = aMatrix.times(pPhiMatrix).times(aMatrix.transpose()).plus(qMatrix).getArray();
 	
 	for(int i=0;i<pPhi.length;i++)
