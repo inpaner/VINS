@@ -45,6 +45,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     private static final String TAG = "Fast Activity";
     private FeatureDetector detector;
     
+    // TODO: Change this to either VideoCapture or another alternative
     private CameraBridgeViewBase mOpenCvCameraView;
     private TextView textBox;
     private int totalUpdates = 0;
@@ -94,7 +95,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     }
     
     // http://stackoverflow.com/a/7433510
-    
+     
     private void updateFPS() {
         textBox.setText("FPS: " + totalUpdates);
         Log.d("FPS printing", ""+totalUpdates);
@@ -134,13 +135,13 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     	 
         drawMasks = new ArrayList<Mat>();
     	
-    	// CAMERA CALIBRATION START
+    	// INITIALIZATION FOR STEREORECTIFY
         
         // INPUT VARIABLES
         
         cameraMatrix = Mat.zeros(3, 3, CvType.CV_64F);
         distCoeffs =  Mat.zeros(5, 1, CvType.CV_64F);
-        imageSize = new Size(width, height);
+        imageSize = new Size(1920, 1080);
         Rot = Mat.zeros(3, 3, CvType.CV_64F);
         T = Mat.ones(3, 1, CvType.CV_64F);
         
@@ -166,16 +167,20 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         P2 = Mat.zeros(3, 4, CvType.CV_64F);
         Q = Mat.zeros(4, 4, CvType.CV_64F);
         
+        // INITIALIZATION END
+        
+        // CALL STEREORECTIFY EACH FRAME AFTER THE FIRST
+        // JUST PASS A NEW ROTATION AND TRANSLATION MATRIX
+        
         Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, Rot, T, R1, R2, P1, P2, Q);
         
-        // CAMERA CALIBRATION END
+        
     }
 
     public void onCameraViewStopped() { }
     
     private MatOfPoint2f prevFeatures;
     private Mat prevImage;
-    private Mat drawMask;
     
     private List<Mat> drawMasks;
     
@@ -187,8 +192,9 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     private int frames = 0;
     private int detectInterval = 5;
     
-    // NOTE: just a tempory variable
-    private boolean first = true;
+    // NOTE: just temporary variables
+    private int triPointsKeep = 5;
+    private int framesFade = 3;
     
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Log.d("VINS", "onCameraFrame");
@@ -238,19 +244,20 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
             
             // TODO: might want to initialize points4D with a large Nx4 Array
             //		 so that both memory and time will be saved (instead of reallocation each time)
+            //		 consider converting to Euclidean, but maybe no need.
             
             points4D = Mat.zeros(1, 4, CvType.CV_64F);
             
             if(!goodOld.empty() && !goodOld.empty())
             	Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
             
-            // Only dumps the first triangulation result for now
-            if(first){
+            // Only dumps a few sets of triangulation results for now
+            if(triPointsKeep > 0){
                 Log.i("Array Sizes", goodOld.size() + " " + goodNew.size() + " " + points4D.size());
                 Log.i("Old Points", goodOld.dump());
-                Log.i("New Points", goodOld.dump());
+                Log.i("New Points", goodNew.dump());
             	Log.i("Triangulated Points", points4D.dump());
-            	first = !first;
+            	triPointsKeep--;
             }
         }
         
@@ -267,7 +274,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         
         drawMasks.add(drawMask.clone());
         
-        if(drawMasks.size() > (detectInterval * 5)){
+        if(drawMasks.size() > framesFade){
         	Mat old = drawMasks.get(0);
         	Mat filtered = drawMask;
         	filtered.setTo(BLACK, old);
