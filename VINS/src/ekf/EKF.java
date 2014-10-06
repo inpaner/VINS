@@ -58,30 +58,27 @@ public class EKF{
 	double[][] Q = createQ(displacementX, displacementY, displacementHeading);
 	Matrix qMatrix = new Matrix(Q);
 	
-	double[][] pPhi = extractPPhi(P);
-	Matrix pPhiMatrix = new Matrix(pPhi);
+	Matrix pPhiMatrix = this.extractPPhi();
 	
 	double[][] A = createA(displacementX, displacementY); // Jacobian of Prediction Model
 	Matrix aMatrix = new Matrix(A);
 	
 	// pPhi = A * pPphi * A^T + Q
-	pPhi = aMatrix.times(pPhiMatrix).times(aMatrix.transpose()).plus(qMatrix).getArray();
+	pPhiMatrix = aMatrix.times(pPhiMatrix).times(aMatrix.transpose()).plus(qMatrix);
 	
-	for(int i=0;i<pPhi.length;i++)
-	    for(int j=0;j<pPhi.length;j++)
-		P.get(i).set(j, pPhi[i][j]);
+	for(int i=0;i<pPhiMatrix.getRowDimension();i++)
+	    for(int j=0;j<pPhiMatrix.getColumnDimension();j++)
+		P.get(i).set(j, pPhiMatrix.get(i, j));
 	
 	// Update the first 3 columns of P (device to feature correlation) P_ri = A * P_ri
 	
 	for(int i=0;i<numFeatures;i++){
-	    double[][] Pri = extractPri(P, i);
-	    Matrix PriMatrix = new Matrix(Pri);
+	    Matrix PriMatrix = extractPri(i);
 	    PriMatrix = PriMatrix.times(aMatrix);
-	    Pri = PriMatrix.getArray();
 	    
-	    for(int j=0;j<Pri.length; j++)
-	    	for(int k=0;k<Pri[j].length;k++)
-	    	    P.get(j).set(k, Pri[j][k]);
+	    for(int j=0;j<PriMatrix.getRowDimension(); j++)
+	    	for(int k=0;k<PriMatrix.getColumnDimension();k++)
+	    	    P.get(j).set(k, PriMatrix.get(j, k));
 	}   
 	
 	//Update Jr and Jz matrices
@@ -89,26 +86,14 @@ public class EKF{
 	jzMatrix = this.createJZMatrix(displacementX, displacementY, headingRadians);
     }
     
-    private double[][] extractPri(ArrayList<ArrayList<Double>> P, int index){
-	
+    private Matrix extractPri(int index){
 	int startRowIndex = 3 + index*2;
 	
-	double[][] Pri = new double[2][3];
-	
-	for(int i=0;i<2;i++)
-	    for(int j=0;j<3;j++)
-		Pri[startRowIndex+i][j] = P.get(i).get(j);
-		
-	return Pri;
+	return this.extractSubMatrix(startRowIndex, startRowIndex+1, 0, 2);
     }
     
-    private double[][] extractPPhi(ArrayList<ArrayList<Double>> P ){
-	double[][] pPhi = new double[3][3];
-	for(int i=0;i<3;i++)
-	    for(int j=0;j<3;j++)
-		pPhi[i][j] = P.get(i).get(j);
-	
-	return pPhi;
+    private Matrix extractPPhi(){
+	return this.extractSubMatrix(0, 2, 0, 2);
     }
     
     
@@ -186,40 +171,6 @@ public class EKF{
 	    
     }
     
-    private Matrix createVRVMatrix(double distance){
-	Random rand = new Random();
-	
-	double[][] vrv = new double[2][2];
-	//this should be r*c, where c is a gaussian with a variance of 0.01. i don't know how that translates to code
-	vrv[0][0] = distance*rand.nextGaussian(); 
-	vrv[1][1] = 1; 
-	return new Matrix(vrv);	
-    }
-    
-    private Matrix createStateVectorMatrix(){
-	double[][] x= new double[X.size()][1];
-	for(int i=0; i<X.size(); i++)
-	    x[i][0] = X.get(i);
-	
-	return new Matrix(x);
-    }
-    
-    private PointDouble getDeviceCoords(){
-	PointDouble point = new PointDouble(X.get(0), X.get(1)); 
-	return point;
-    }
-    
-    private PointDouble getFeatureCoordsFromStateVector(int featureIndex){
-
-	int stateVectorIndexOfFeature = 3 + featureIndex * 2;
-	double targetFeatureX = X.get(stateVectorIndexOfFeature);
-	double targetFeatureY = X.get(stateVectorIndexOfFeature+1);
-	
-	PointDouble point = new PointDouble(targetFeatureX, targetFeatureY); 
-	
-	return point;
-    } 
-    
     //Method for deleting a feature. Includes removing the feature from the state vector and covariance matrix.
     public void deleteFeature(int featureIndex){
 	int targetIndexStart = 3 + featureIndex * 2;
@@ -245,9 +196,8 @@ public class EKF{
 	//add to covariance matrix
 	//add 2 rows, then add two columns at the end
 
-	Matrix pPhiMatrix = new Matrix(this.extractPPhi(P));
+	Matrix pPhiMatrix = this.extractPPhi();
 	
-
 	ArrayList<Matrix> toAdd = new ArrayList<Matrix>();
 	
 	//P^phi * Jxr^T
@@ -287,18 +237,23 @@ public class EKF{
 	    
 	    P.add(currRow);
 	}
-
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
     }
+    
+    private PointDouble getDeviceCoords(){
+	PointDouble point = new PointDouble(X.get(0), X.get(1)); 
+	return point;
+    }
+    
+    private PointDouble getFeatureCoordsFromStateVector(int featureIndex){
+
+	int stateVectorIndexOfFeature = 3 + featureIndex * 2;
+	double targetFeatureX = X.get(stateVectorIndexOfFeature);
+	double targetFeatureY = X.get(stateVectorIndexOfFeature+1);
+	
+	PointDouble point = new PointDouble(targetFeatureX, targetFeatureY); 
+	
+	return point;
+    } 
     
     private Matrix extractSubMatrix(int startRow, int endRow, int startCol, int endCol){
 	double[][] sub = new double[endRow-startRow+1][endCol-startCol+1];
@@ -306,6 +261,24 @@ public class EKF{
 	    for(int j=startCol; j<=endCol; j++)
 		sub[i-startRow][j-startCol] = P.get(i).get(j);
 	 return new Matrix(sub);
+    }
+    
+    private Matrix createVRVMatrix(double distance){
+	Random rand = new Random();
+	
+	double[][] vrv = new double[2][2];
+	//Variance of 0.01 included this way according to http://www.javapractices.com/topic/TopicAction.do?Id=62
+	vrv[0][0] = distance*rand.nextGaussian()*0.01; 
+	vrv[1][1] = 1; 
+	return new Matrix(vrv);	
+    }
+    
+    private Matrix createStateVectorMatrix(){
+	double[][] x= new double[X.size()][1];
+	for(int i=0; i<X.size(); i++)
+	    x[i][0] = X.get(i);
+	
+	return new Matrix(x);
     }
     
     private Matrix createJRMatrix(double displacementX, double displacementY){
