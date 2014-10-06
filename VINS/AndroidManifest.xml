@@ -24,7 +24,11 @@
         android:required="false" />
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-
+    
+    <instrumentation android:name="android.test.InstrumentationTestRunner"
+    android:targetPackage="dlsu.vins"
+    android:label="VINS Tests" />
+    
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
@@ -44,6 +48,8 @@
             android:name="dlsu.vins.DriverActivity"
             android:label="@string/title_activity_driver" >
         </activity>
+        
+    	<uses-library android:name="android.test.runner" />
     </application>
 
 </manifest>

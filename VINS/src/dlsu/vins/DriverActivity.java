@@ -53,7 +53,7 @@ public class DriverActivity extends Activity implements SensorEventListener{
 	DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
 	
 	/* PASS DISTANCE & HEADING TO EKF.insUpdate()*/
-	ekf.insUpdate(devicePose.getXYDistance(), devicePose.getHeading());
+	ekf.predictFromINS(devicePose.getXYDistance(), devicePose.getHeading());
 	
 	
 	/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES*/

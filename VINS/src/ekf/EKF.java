@@ -14,6 +14,9 @@ public class EKF{
 	P = createP();
     }
     
+    public ArrayList<ArrayList<Double>> getP(){
+	return P;
+    }
     
     public DevicePose getCurrDevicePose(){
 	PointDouble deviceCoords = getDeviceCoords();
@@ -28,12 +31,11 @@ public class EKF{
     /********** INS Update **********/
     
     //Performs the state update depending on displacement in meters, and heading in degrees
-    public void insUpdate(double displacement, double heading){
+    public void predictFromINS(double displacement, double headingRadians){
 	//Initialization of variables
-	double headingRadians = Math.toRadians(heading);
 	double displacementX = displacement * Math.cos(headingRadians);
 	double displacementY = displacement * Math.sin(headingRadians);
-	double displacementHeading = heading - X.get(2);
+	double displacementHeading = headingRadians - X.get(2);
 	
 	//Update the state vector
 	double newX = X.get(0) + displacementX;
@@ -41,7 +43,7 @@ public class EKF{
 	
 	X.set(0, newX);
 	X.set(1, newY);
-	X.set(2, heading);
+	X.set(2, headingRadians);
 	
 	//Update the upper left 3x3 sub-covariance matrix
 	double[][] Q = createQ(displacementX, displacementY, displacementHeading);
@@ -100,7 +102,7 @@ public class EKF{
     /********** V-INS Update **********/
     
     //Method for correcting the state vector based on re-observed features.
-    public void updateReobservedFeature(int featureIndex, int observedDistance, int observedHeading){
+    public void updateFromReobservedFeature(int featureIndex, int observedDistance, int observedHeading){
 	
 	PointDouble featureCoords = this.getFeatureCoordsFromStateVector(featureIndex);
 	PointDouble deviceCoords = this.getDeviceCoords();
@@ -273,15 +275,14 @@ public class EKF{
 	return A;
     }
      
-    //Returns the Process Noise Q based on the given deltaX and deltaY
+    //Returns the Process Noise Q based on the given deltaX and deltaY, and deltaT in radians
     private double[][] createQ(double dX, double dY, double dT){
-	double c = 0.1;
+	double c = 0.1; // will change this accdg to trial and error (accdg to SLAM for dummies)
 	double[][] Q = {{c*dX*dX, c*dX*dY, c*dX*dT},
 			{c*dY*dX, c*dY*dY, c*dY*dT},
 			{c*dT*dX, c*dT*dY, c*dT*dT}};
 	
 	return Q;
     }
-    
     
 }
