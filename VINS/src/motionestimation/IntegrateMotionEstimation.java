@@ -69,7 +69,8 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		for (Double d : gyrx)
 			heading += d;
 		
-		heading /= numInstances;
+		if(numInstances != 0)
+		    heading /= numInstances;
 		
 		// clear all the arraylists
 		accx.clear();

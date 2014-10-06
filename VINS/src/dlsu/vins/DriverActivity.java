@@ -3,23 +3,30 @@ package dlsu.vins;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import motionestimation.DevicePose;
+import motionestimation.IntegrateMotionEstimation;
+import motionestimation.MotionEstimation;
 import motionestimation.SensorEntry;
 import android.app.Activity;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.os.Bundle;
+import ekf.EKF;
 
 public class DriverActivity extends Activity implements SensorEventListener{
 
     private SensorEntry nextSensorEntryToAdd;
-	
+    private EKF ekf;
+    MotionEstimation motionEstimator;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 	super.onCreate(savedInstanceState);
 	setContentView(R.layout.activity_driver);
 	
+	ekf = new EKF();
+	motionEstimator = new IntegrateMotionEstimation();
 	nextSensorEntryToAdd = new SensorEntry();
 	startInertialSensorLogging();
 	startDriver();
@@ -43,7 +50,12 @@ public class DriverActivity extends Activity implements SensorEventListener{
     
     private void runOneCycle(){
 	/* TRIGGER MOTION ESTIMATION */
+	DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
+	
 	/* PASS DISTANCE & HEADING TO EKF.insUpdate()*/
+	ekf.insUpdate(devicePose.getXYDistance(), devicePose.getHeading());
+	
+	
 	/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES*/
 
 	/* LOOP THROUGH THE RETURNED FEATURES*/
