@@ -45,6 +45,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     private static final String TAG = "Fast Activity";
     private FeatureDetector detector;
     
+    // TODO: Change this to either VideoCapture or another alternative
     private CameraBridgeViewBase mOpenCvCameraView;
     private TextView textBox;
     private int totalUpdates = 0;
@@ -59,7 +60,6 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
                     prevFeatures = new MatOfPoint2f();
                     prevImage = new Mat();
                     detector = FeatureDetector.create(FeatureDetector.FAST);
-                    
                 } break;
                 default: {
                     super.onManagerConnected(status);
@@ -81,6 +81,8 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
 
         setContentView(R.layout.fastlayout);
 
+        Log.i(TAG, "Trying to load OpenCV library");
+
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.surface_view);
         textBox = (TextView) findViewById(R.id.counter);
         
@@ -93,7 +95,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     }
     
     // http://stackoverflow.com/a/7433510
-    
+     
     private void updateFPS() {
         textBox.setText("FPS: " + totalUpdates);
         Log.d("FPS printing", ""+totalUpdates);
@@ -112,7 +114,10 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     public void onResume()
     {
         super.onResume();
-        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_3, this, mLoaderCallback);
+        if (!OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_2, this, mLoaderCallback))
+        {
+          Log.e(TAG, "Cannot connect to OpenCV Manager");
+        }   
     }
 
     public void onDestroy() {
@@ -120,16 +125,64 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
     }
+    
+    private Size imageSize;
+    private Mat cameraMatrix, distCoeffs, Rot, T;
+    private Mat R1,R2,P1,P2,Q;
+    private Mat points4D;
 
     public void onCameraViewStarted(int width, int height) {
+    	 
+        drawMasks = new ArrayList<Mat>();
+    	
+    	// INITIALIZATION FOR STEREORECTIFY
+        
+        // INPUT VARIABLES
+        
+        cameraMatrix = Mat.zeros(3, 3, CvType.CV_64F);
+        distCoeffs =  Mat.zeros(5, 1, CvType.CV_64F);
+        imageSize = new Size(1920, 1080);
+        Rot = Mat.zeros(3, 3, CvType.CV_64F);
+        T = Mat.ones(3, 1, CvType.CV_64F);
+        
+        cameraMatrix.put(0, 0, 1768.104971372035, 0, 959.5);
+        cameraMatrix.put(1, 0, 0, 1768.104971372035, 539.5);
+        cameraMatrix.put(2, 0, 0, 0, 1);
+        
+        distCoeffs.put(0, 0, 0.1880897270445046);
+        distCoeffs.put(1, 0, -0.7348187497379466);
+        distCoeffs.put(2, 0, 0);
+        distCoeffs.put(3, 0, 0);
+        distCoeffs.put(4, 0, 0.6936210153459164);
+        
+        Rot.put(0, 0, 1, 0, 0);
+        Rot.put(1, 0, 0, 1, 0);
+        Rot.put(2, 0, 0, 0, 1);
+        
+        // OUTPUT VARIABLES
+        
+        R1 = Mat.zeros(3, 3, CvType.CV_64F);
+        R2 = Mat.zeros(3, 3, CvType.CV_64F);
+        P1 = Mat.zeros(3, 4, CvType.CV_64F);
+        P2 = Mat.zeros(3, 4, CvType.CV_64F);
+        Q = Mat.zeros(4, 4, CvType.CV_64F);
+        
+        // INITIALIZATION END
+        
+        // CALL STEREORECTIFY EACH FRAME AFTER THE FIRST
+        // JUST PASS A NEW ROTATION AND TRANSLATION MATRIX
+        
+        Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, Rot, T, R1, R2, P1, P2, Q);
+        
+        
     }
 
-    public void onCameraViewStopped() {
-    }
+    public void onCameraViewStopped() { }
     
     private MatOfPoint2f prevFeatures;
     private Mat prevImage;
-    private Mat drawMask;
+    
+    private List<Mat> drawMasks;
     
     private final Scalar RED = new Scalar(255,0,0);
     private final Scalar GREEN = new Scalar(0,255,0);
@@ -139,6 +192,10 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     private int frames = 0;
     private int detectInterval = 5;
     
+    // NOTE: just temporary variables
+    private int triPointsKeep = 5;
+    private int framesFade = 3;
+    
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Log.d("VINS", "onCameraFrame");
         
@@ -146,6 +203,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         
         Mat modifiedImage = image.clone();
         Mat detectMask = image.clone();
+        Mat drawMask = image.clone();
         detectMask.setTo(WHITE);
         
         if (prevFeatures.size().height > 0) {
@@ -181,7 +239,26 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
             goodNew.fromList(goodNewList);
             
             goodNew.copyTo(prevFeatures);
-            Log.d("Prev", goodOld.size() + "");
+
+            // TRIANGULATION ???
+            
+            // TODO: might want to initialize points4D with a large Nx4 Array
+            //		 so that both memory and time will be saved (instead of reallocation each time)
+            //		 consider converting to Euclidean, but maybe no need.
+            
+            points4D = Mat.zeros(1, 4, CvType.CV_64F);
+            
+            if(!goodOld.empty() && !goodOld.empty())
+            	Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
+            
+            // Only dumps a few sets of triangulation results for now
+            if(triPointsKeep > 0){
+                Log.i("Array Sizes", goodOld.size() + " " + goodNew.size() + " " + points4D.size());
+                Log.i("Old Points", goodOld.dump());
+                Log.i("New Points", goodNew.dump());
+            	Log.i("Triangulated Points", points4D.dump());
+            	triPointsKeep--;
+            }
         }
         
         if (frames % detectInterval == 0) {
@@ -193,11 +270,23 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
             }
         }
         
-        // resets the tracks after a while, else screen will be all white
-        if (frames % (detectInterval * 5) == 0) {
-            drawMask = image.clone();
-            drawMask.setTo(BLACK);
+        // fades lines (purely a visual thing really)
+        
+        drawMasks.add(drawMask.clone());
+        
+        if(drawMasks.size() > framesFade){
+        	Mat old = drawMasks.get(0);
+        	Mat filtered = drawMask;
+        	filtered.setTo(BLACK, old);
+        	drawMasks.remove(0);
+        	drawMask = filtered;
         }
+        
+//        // resets the tracks after a while, else screen will be all white
+//        if (frames % (detectInterval * 5) == 0) {
+//            drawMask = image.clone();
+//            drawMask.setTo(BLACK);
+//        }
         
         frames++;
         image.copyTo(prevImage);
@@ -218,13 +307,10 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        
-
         return true;
     }
    
     public boolean onOptionsItemSelected(MenuItem item) {
-
         return true;
     }
 }
