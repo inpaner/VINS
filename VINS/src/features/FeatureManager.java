@@ -1,15 +1,14 @@
-package dlsu.vins;
+package features;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
@@ -17,85 +16,74 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfKeyPoint;
-import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
-import org.opencv.core.TermCriteria;
-import org.opencv.features2d.DescriptorExtractor;
-import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
-import org.opencv.features2d.Features2d;
 import org.opencv.features2d.KeyPoint;
 import org.opencv.video.Video;
 
+import dlsu.vins.R;
 import android.app.Activity;
-import android.graphics.Canvas;
+import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SurfaceView;
 import android.view.WindowManager;
-import android.widget.TextView;
 
-public class FastActivity extends Activity implements CvCameraViewListener2 {
-    private static final String TAG = "Fast Activity";
+public class FeatureManager implements CvCameraViewListener2 {
+    private static final String TAG = "Feature Manager";
     private FeatureDetector detector;
     
     // TODO: Change this to either VideoCapture or another alternative
     private CameraBridgeViewBase mOpenCvCameraView;
-    private int totalUpdates = 0;
     
-    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
-        @Override
-        public void onManagerConnected(int status) {
-            switch (status) {
-                case LoaderCallbackInterface.SUCCESS: {
-                    Log.i(TAG, "OpenCV loaded successfully");
-                    mOpenCvCameraView.enableView();
-                    prevFeatures = new MatOfPoint2f();
-                    prevImage = new Mat();
-                    detector = FeatureDetector.create(FeatureDetector.FAST);
-                } break;
-                default: {
-                    super.onManagerConnected(status);
-                } break;
-            }
-        }
-    };
+    private BaseLoaderCallback mLoaderCallback;
 
-    public FastActivity() {
-        Log.i(TAG, "Instantiated new " + this.getClass());
-    }
-
-    /** Called when the activity is first created. */
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        Log.i(TAG, "called onCreate");
-        super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        setContentView(R.layout.fastlayout);
-
-        Log.i(TAG, "Trying to load OpenCV library");
-
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.surface_view);
+    
+    public FeatureManager(Activity caller) {
+        Log.i(TAG, "constructed");
         
+        Log.i(TAG, "Trying to load OpenCV library");
+        loadOpenCv(caller);
+        
+        mOpenCvCameraView = (CameraBridgeViewBase) caller.findViewById(R.id.surface_view);
         // http://stackoverflow.com/a/17872107
         //mOpenCvCameraView.setMaxFrameSize(720, 1280); // sets to 720 x 480
         mOpenCvCameraView.setMaxFrameSize(400, 1280); // sets to 320 x 240
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         
         mOpenCvCameraView.setCvCameraViewListener(this);
+        
+        if (!OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_9, caller, mLoaderCallback)) {
+          Log.e(TAG, "Cannot connect to OpenCV Manager");
+        }
     }
     
-    // http://stackoverflow.com/a/7433510
-     
+    private void loadOpenCv(Activity caller) {
+    	mLoaderCallback = new BaseLoaderCallback(caller) {
+            @Override
+            public void onManagerConnected(int status) {
+                switch (status) {
+                    case LoaderCallbackInterface.SUCCESS: {
+                        Log.i(TAG, "OpenCV loaded successfully");
+                        mOpenCvCameraView.enableView();
+                        prevFeatures = new MatOfPoint2f();
+                        prevImage = new Mat();
+                        detector = FeatureDetector.create(FeatureDetector.FAST);
+                    } break;
+                    default: {
+                        super.onManagerConnected(status);
+                    } break;
+                }
+            }
+        };
+    }
     
-    
+        
     private Size imageSize;
     private Mat cameraMatrix, distCoeffs, Rot, T;
     private Mat R1,R2,P1,P2,Q;
@@ -143,8 +131,6 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         // JUST PASS A NEW ROTATION AND TRANSLATION MATRIX
         
         Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, Rot, T, R1, R2, P1, P2, Q);
-        
-        
     }
 
     public void onCameraViewStopped() { }
@@ -275,12 +261,6 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         return new MatOfPoint2f(pointsArray);
     }
     
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        return true;
-    }
-   
-    public boolean onOptionsItemSelected(MenuItem item) {
-        return true;
-    }
 }
+
+

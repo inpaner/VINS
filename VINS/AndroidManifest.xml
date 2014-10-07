@@ -38,15 +38,15 @@
             android:name="dlsu.vins.FastActivity"
             android:label="@string/app_name"
             android:screenOrientation="landscape" >
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            
         </activity>
         <activity
             android:name="dlsu.vins.DriverActivity"
             android:label="@string/title_activity_driver" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
         </activity>
         
     	<uses-library android:name="android.test.runner" />
