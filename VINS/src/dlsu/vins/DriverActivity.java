@@ -60,7 +60,7 @@ public class DriverActivity extends Activity implements SensorEventListener {
 		ekf.predictFromINS(devicePose.getXYDistance(), devicePose.getHeading());
 
 		/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES */
-
+		
 		/* LOOP THROUGH THE RETURNED FEATURES */
 		/* IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex) */
 		/*

@@ -133,16 +133,16 @@ public class FeatureManager implements CvCameraViewListener2 {
         Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, Rot, T, R1, R2, P1, P2, Q);
     }
 
-    public void onCameraViewStopped() { }
+    public void onCameraViewStopped() {}
     
     private MatOfPoint2f prevFeatures;
     private Mat prevImage;
+    private Mat currentImage;
     
     private List<Mat> drawMasks;
     
     private final Scalar RED = new Scalar(255,0,0);
-    private final Scalar GREEN = new Scalar(0,255,0);
-    private final Scalar BLACK = new Scalar(0);
+     private final Scalar BLACK = new Scalar(0);
     private final Scalar WHITE = new Scalar(255);
     
     private int frames = 0;
@@ -156,6 +156,34 @@ public class FeatureManager implements CvCameraViewListener2 {
         Log.d("VINS", "onCameraFrame");
         
         Mat image = inputFrame.gray();
+        
+        currentImage = image;
+        
+        frames++;
+        image.copyTo(prevImage);
+        Log.d("Next", prevFeatures.size() + "");
+        return image;
+    }
+    
+    private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
+        KeyPoint[] keyPointsArray = keyPoints.toArray();
+        Point[] pointsArray = new Point[keyPointsArray.length];
+        
+        for (int i = 0; i < keyPointsArray.length; i++) {
+            pointsArray[i] = (Point) keyPointsArray[i].pt;
+        }
+        
+        return new MatOfPoint2f(pointsArray);
+    }
+    
+    class FeatureUpdate {
+    	
+    }
+    
+    public void getFeatureUpdate() {
+    	Log.d(TAG, "Getting Feature Update");
+    	
+    	Mat image = currentImage;
         
         Mat modifiedImage = image.clone();
         Mat detectMask = image.clone();
@@ -173,15 +201,14 @@ public class FeatureManager implements CvCameraViewListener2 {
             List<Point> goodOldList = new ArrayList<>();
             List<Point> goodNewList = new ArrayList<>();
             List<Integer> badPointsIndex = new ArrayList<>();
+            
             int i = 0;
             Mat imageLines = image.clone();
             for (Byte item : status.toList()) {
                 if (item.intValue() == 1) {
                     goodOldList.add(oldPoints.get(i));
                     goodNewList.add(newPoints.get(i));
-                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1); // mask out during detection        
-                    Core.line(drawMask, oldPoints.get(i), newPoints.get(i), WHITE, 1);
-                    Core.circle(imageLines, newPoints.get(i), 2, RED, -1);
+                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1); // mask out during detection         
                 }
                 else {
                     badPointsIndex.add(Integer.valueOf(i));
@@ -208,7 +235,7 @@ public class FeatureManager implements CvCameraViewListener2 {
             	Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
             
             // Only dumps a few sets of triangulation results for now
-            if(triPointsKeep > 0){
+            if (triPointsKeep > 0){
                 Log.i("Array Sizes", goodOld.size() + " " + goodNew.size() + " " + points4D.size());
                 Log.i("Old Points", goodOld.dump());
                 Log.i("New Points", goodNew.dump());
@@ -226,41 +253,9 @@ public class FeatureManager implements CvCameraViewListener2 {
             }
         }
         
-        // fades lines (purely a visual thing really)
-        
-        drawMasks.add(drawMask.clone());
-        
-        if(drawMasks.size() > framesFade){
-        	Mat old = drawMasks.get(0);
-        	Mat filtered = drawMask;
-        	filtered.setTo(BLACK, old);
-        	drawMasks.remove(0);
-        	drawMask = filtered;
-        }
-        
-//        // resets the tracks after a while, else screen will be all white
-//        if (frames % (detectInterval * 5) == 0) {
-//            drawMask = image.clone();
-//            drawMask.setTo(BLACK);
-//        }
-        
-        frames++;
         image.copyTo(prevImage);
         Log.d("Next", prevFeatures.size() + "");
-        return modifiedImage.setTo(BLACK);
     }
-    
-    private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
-        KeyPoint[] keyPointsArray = keyPoints.toArray();
-        Point[] pointsArray = new Point[keyPointsArray.length];
-        
-        for (int i = 0; i < keyPointsArray.length; i++) {
-            pointsArray[i] = (Point) keyPointsArray[i].pt;
-        }
-        
-        return new MatOfPoint2f(pointsArray);
-    }
-    
 }
 
 

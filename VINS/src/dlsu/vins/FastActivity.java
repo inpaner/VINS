@@ -94,7 +94,33 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     
     // http://stackoverflow.com/a/7433510
      
+
+    private void updateFPS() {
+        Log.d("FPS printing", ""+totalUpdates);
+        totalUpdates = 0;
+    }
     
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (mOpenCvCameraView != null)
+            mOpenCvCameraView.disableView();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_2, this, mLoaderCallback))
+        {
+          Log.e(TAG, "Cannot connect to OpenCV Manager");
+        }   
+    }
+
+    public void onDestroy() {
+        super.onDestroy();
+        if (mOpenCvCameraView != null)
+            mOpenCvCameraView.disableView();
+    }
     
     private Size imageSize;
     private Mat cameraMatrix, distCoeffs, Rot, T;
