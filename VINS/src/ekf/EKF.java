@@ -309,7 +309,10 @@ public class EKF{
 	for(int i=0;i<3;i++){
 	    ArrayList<Double> currRow = new ArrayList<Double>();
 	    for(int j=0;j<3;j++){
-		currRow.add(0.0);
+		if(i!=j)
+		    currRow.add(0.0);
+		else
+		    currRow.add(0.1);
 	    }
 	    P.add(currRow);
 	}
