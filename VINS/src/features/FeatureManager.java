@@ -38,45 +38,58 @@ import android.view.WindowManager;
 
 public class FeatureManager implements CvCameraViewListener2 {
     private static final String TAG = "Feature Manager";
-    private FeatureDetector detector;
-    private final Scalar RED = new Scalar(255,0,0);
     private final Scalar BLACK = new Scalar(0);
     private final Scalar WHITE = new Scalar(255);
-    
-    
-    // TODO: Change this to either VideoCapture or another alternative
-    private CameraBridgeViewBase mOpenCvCameraView;
-    
-    private BaseLoaderCallback mLoaderCallback;
 
+    private BaseLoaderCallback loaderCallback;
+
+    private FeatureDetector detector;
     
-    public FeatureManager(Activity caller) {
+    private int frames = 0;
+    private CameraBridgeViewBase cameraView;
+    
+    // Optical flow fields
+    private MatOfPoint2f prevCurrent;
+	private MatOfPoint2f prevNew;
+	private Mat prevImage;
+	private Mat currentImage;
+	    
+    // Triangulation fields
+    private Size imageSize;
+    private Mat cameraMatrix, distCoeffs, Rot, T;
+    private Mat R1,R2,P1,P2,Q;
+    private Mat points4D;
+    private Mat F, E, W;
+	private Mat u, w, vt;
+	private Mat nullMatF, temp;
+
+	public FeatureManager(Activity caller) {
         Log.i(TAG, "constructed");
         
         Log.i(TAG, "Trying to load OpenCV library");
-        loadOpenCv(caller);
+        initLoader(caller);
         
-        mOpenCvCameraView = (CameraBridgeViewBase) caller.findViewById(R.id.surface_view);
+        cameraView = (CameraBridgeViewBase) caller.findViewById(R.id.surface_view);
         // http://stackoverflow.com/a/17872107
-        //mOpenCvCameraView.setMaxFrameSize(720, 1280); // sets to 720 x 480
-        mOpenCvCameraView.setMaxFrameSize(400, 1280); // sets to 320 x 240
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+        //cameraView.setMaxFrameSize(720, 1280); // sets to 720 x 480
+        cameraView.setMaxFrameSize(400, 1280); // sets to 320 x 240
+        cameraView.setVisibility(SurfaceView.VISIBLE);
         
-        mOpenCvCameraView.setCvCameraViewListener(this);
+        cameraView.setCvCameraViewListener(this);
         
-        if (!OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_9, caller, mLoaderCallback)) {
+        if (!OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_9, caller, loaderCallback)) {
           Log.e(TAG, "Cannot connect to OpenCV Manager");
         }
     }
     
-    private void loadOpenCv(Activity caller) {
-    	mLoaderCallback = new BaseLoaderCallback(caller) {
+    private void initLoader(Activity caller) {
+    	loaderCallback = new BaseLoaderCallback(caller) {
             @Override
             public void onManagerConnected(int status) {
                 switch (status) {
                     case LoaderCallbackInterface.SUCCESS: {
                         Log.i(TAG, "OpenCV loaded successfully");
-                        mOpenCvCameraView.enableView();
+                        cameraView.enableView();
                         prevCurrent = new MatOfPoint2f();
                         prevImage = new Mat();
                         detector = FeatureDetector.create(FeatureDetector.FAST);
@@ -90,14 +103,9 @@ public class FeatureManager implements CvCameraViewListener2 {
     }
     
         
-    private Size imageSize;
-    private Mat cameraMatrix, distCoeffs, Rot, T;
-    private Mat R1,R2,P1,P2,Q;
-    private Mat points4D;
-
-    public void onCameraViewStarted(int width, int height) {
-    	 
-        // INITIALIZATION FOR STEREORECTIFY
+    
+    private void initRectifyVariables(){
+    	// INITIALIZATION FOR STEREORECTIFY()
         
         // INPUT VARIABLES
         
@@ -107,15 +115,16 @@ public class FeatureManager implements CvCameraViewListener2 {
         Rot = Mat.zeros(3, 3, CvType.CV_64F);
         T = Mat.ones(3, 1, CvType.CV_64F);
         
-        cameraMatrix.put(0, 0, 1768.104971372035, 0, 959.5);
-        cameraMatrix.put(1, 0, 0, 1768.104971372035, 539.5);
+        // CALIBRATION RESULTS FOR 320 x 240
+        cameraMatrix.put(0, 0, 287.484405747163, 0, 159.5);
+        cameraMatrix.put(1, 0, 0, 287.484405747163, 119.5);
         cameraMatrix.put(2, 0, 0, 0, 1);
         
-        distCoeffs.put(0, 0, 0.1880897270445046);
-        distCoeffs.put(1, 0, -0.7348187497379466);
+        distCoeffs.put(0, 0, 0.1831508618865668);
+        distCoeffs.put(1, 0, -0.8391135375141514);
         distCoeffs.put(2, 0, 0);
         distCoeffs.put(3, 0, 0);
-        distCoeffs.put(4, 0, 0.6936210153459164);
+        distCoeffs.put(4, 0, 1.067914298622483);
         
         Rot.put(0, 0, 1, 0, 0);
         Rot.put(1, 0, 0, 1, 0);
@@ -134,11 +143,26 @@ public class FeatureManager implements CvCameraViewListener2 {
         // CALL STEREORECTIFY EACH FRAME AFTER THE FIRST
         // JUST PASS A NEW ROTATION AND TRANSLATION MATRIX
         
-        Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, Rot, T, R1, R2, P1, P2, Q);
+//        CALIBRATION RESULTS FOR 1920 x 1080
+//        cameraMatrix.put(0, 0, 1768.104971372035, 0, 959.5);
+//        cameraMatrix.put(1, 0, 0, 1768.104971372035, 539.5);
+//        cameraMatrix.put(2, 0, 0, 0, 1);
+//        
+//        distCoeffs.put(0, 0, 0.1880897270445046);
+//        distCoeffs.put(1, 0, -0.7348187497379466);
+//        distCoeffs.put(2, 0, 0);
+//        distCoeffs.put(3, 0, 0);
+//        distCoeffs.put(4, 0, 0.6936210153459164);
+    }
+    
+    
+    public void onCameraViewStarted(int width, int height) {
+        nullMatF = Mat.zeros(0, 0, CvType.CV_64F);
+    	initRectifyVariables();
     }
 
+
     public void onCameraViewStopped() {}
-    
     
     
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
@@ -147,26 +171,7 @@ public class FeatureManager implements CvCameraViewListener2 {
         frames++;
         return currentImage;
     }
-    
-    private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
-        KeyPoint[] keyPointsArray = keyPoints.toArray();
-        Point[] pointsArray = new Point[keyPointsArray.length];
-        
-        for (int i = 0; i < keyPointsArray.length; i++) {
-            pointsArray[i] = (Point) keyPointsArray[i].pt;
-        }
-        
-        return new MatOfPoint2f(pointsArray);
-    }
-        
-    private MatOfPoint2f prevCurrent;
-    private MatOfPoint2f prevNew;
-    
-    private Mat prevImage;
-    private Mat currentImage;
-    
-    private int frames = 0;
-    
+
     
     public FeatureUpdate getFeatureUpdate() {
     	Log.d(TAG, "Getting Feature Update");
@@ -190,13 +195,13 @@ public class FeatureManager implements CvCameraViewListener2 {
             
             Video.calcOpticalFlowPyrLK(prevImage, currentImage, prevCurrent, nextFeatures, status, err);
             
+            // Use status to filter out good points from bad
+            
             List<Point> oldPoints = prevCurrent.toList();
             List<Point> newPoints = nextFeatures.toList();
             List<Point> goodOldList = new ArrayList<>();
             List<Point> goodNewList = new ArrayList<>();
             List<Integer> badPointsIndex = new ArrayList<>();
-            
-            // Use status to split good from bad  
             
             int index = 0;
             int currentSize = 0;
@@ -215,34 +220,83 @@ public class FeatureManager implements CvCameraViewListener2 {
             }
             
             // Convert from List to OpenCV matrix for triangulation
+            
             MatOfPoint2f goodOld = new MatOfPoint2f();
             MatOfPoint2f goodNew = new MatOfPoint2f();
-            
             goodOld.fromList(goodOldList);
             goodNew.fromList(goodNewList);
             
             
-            //// TRIANGULATION ???
+            //// Triangulation
             
             // TODO: might want to initialize points4D with a large Nx4 Array
             //		 so that both memory and time will be saved (instead of reallocation each time)
-            //		 consider converting to Euclidean, but maybe no need.
             
             
-            if(!goodOld.empty() && !goodNew.empty()) {
+            if (!goodOld.empty() && !goodNew.empty()) {
+            	// SOLVING FOR THE ROTATION AND TRANSLATION MATRICES
+				
+				// GETTING THE FUNDAMENTAL MATRIX
+				
+				F = Calib3d.findFundamentalMat(goodOld, goodNew);
+
+				cameraMatrix = cameraMatrix.clone();
+
+				temp = nullMatF.clone();
+				E = nullMatF.clone();
+								
+				// GETTING THE ESSENTIAL MATRIX
+				
+				Core.gemm(cameraMatrix.t(), F, 1, nullMatF, 0, temp);
+				Core.gemm(temp, cameraMatrix, 1, nullMatF, 0, E);
+				
+				W = Mat.zeros(3, 3, CvType.CV_64F);
+            	W.put(0, 1, -1);
+            	W.put(1, 0, 1);
+            	W.put(2, 2, 1);
+            	u = nullMatF.clone();
+            	w = nullMatF.clone();
+            	vt = nullMatF.clone();
+            	
+				// DECOMPOSING ESSENTIAL MATRIX TO GET THE ROTATION AND TRANSLATION MATRICES
+            	
+            	// Decomposing Essential Matrix to obtain Rotation and Translation Matrices
+
+            	Core.SVDecomp(E, w, u, vt);
+
+            	Core.gemm(u, W, 1, nullMatF, 0, temp);
+            	Core.gemm(temp, vt, 1, nullMatF, 0, Rot);
+            	T = u.col(2);
+
+				// (DEBUG) LOGGING THE VARIOUS MATRICES
+            	
+//            	Log.i("E", E.dump());
+//            	Log.i("K", cameraMatrix.dump());
+//            	Log.i("F", F.dump());
+//            	Log.i("K", cameraMatrix.dump());
+//            	Log.i("E", E.dump());
+//            	Log.i("w", w.dump());
+//            	Log.i("u", u.dump());
+//            	Log.i("vt", vt.dump());
+//            	Log.i("r", Rot.dump());
+//            	Log.i("t", T.dump());
+//            	Log.i("nullMatF", nullMatF.dump());
+            	            	
             	points4D = Mat.zeros(1, 4, CvType.CV_64F);
+            	Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, Rot, T, R1, R2, P1, P2, Q);
             	Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
             	
             	//Mat points3D = new Mat();
             	//Calib3d.convertPointsFromHomogeneous(points4D, points3D);
             	
-            	// TODO verify this shit
             	// Split points to current and new PointDouble
-                List<PointDouble> current2d = new ArrayList<>();
+            	// TODO verify this shit
+            	
+            	List<PointDouble> current2d = new ArrayList<>();
                 List<PointDouble> new2d = new ArrayList<>();
                 for (int i = 0; i < goodOld.height(); i++) {
-                	double x = points4D.get(0, i)[0];
-                	double y = points4D.get(1, i)[0];
+                	double x = points4D.get(0, i)[0] / points4D.get(0, i)[3];
+                	double y = points4D.get(1, i)[0] / points4D.get(0, i)[3];
                 	
                 	PointDouble point = new PointDouble(x, y);
                 	if (i < currentSize) {
@@ -271,6 +325,16 @@ public class FeatureManager implements CvCameraViewListener2 {
         currentImage.copyTo(prevImage);
         return update;
     }
+
+    
+	private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
+	    KeyPoint[] keyPointsArray = keyPoints.toArray();
+	    Point[] pointsArray = new Point[keyPointsArray.length];
+	    
+	    for (int i = 0; i < keyPointsArray.length; i++) {
+	        pointsArray[i] = (Point) keyPointsArray[i].pt;
+	    }
+	    
+	    return new MatOfPoint2f(pointsArray);
+	}
 }
-
-
