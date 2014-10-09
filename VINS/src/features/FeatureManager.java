@@ -18,6 +18,7 @@ import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Point3;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.features2d.FeatureDetector;
@@ -25,6 +26,7 @@ import org.opencv.features2d.KeyPoint;
 import org.opencv.video.Video;
 
 import dlsu.vins.R;
+import ekf.PointDouble;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
@@ -37,6 +39,10 @@ import android.view.WindowManager;
 public class FeatureManager implements CvCameraViewListener2 {
     private static final String TAG = "Feature Manager";
     private FeatureDetector detector;
+    private final Scalar RED = new Scalar(255,0,0);
+    private final Scalar BLACK = new Scalar(0);
+    private final Scalar WHITE = new Scalar(255);
+    
     
     // TODO: Change this to either VideoCapture or another alternative
     private CameraBridgeViewBase mOpenCvCameraView;
@@ -71,7 +77,7 @@ public class FeatureManager implements CvCameraViewListener2 {
                     case LoaderCallbackInterface.SUCCESS: {
                         Log.i(TAG, "OpenCV loaded successfully");
                         mOpenCvCameraView.enableView();
-                        prevFeatures = new MatOfPoint2f();
+                        prevCurrent = new MatOfPoint2f();
                         prevImage = new Mat();
                         detector = FeatureDetector.create(FeatureDetector.FAST);
                     } break;
@@ -91,9 +97,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 
     public void onCameraViewStarted(int width, int height) {
     	 
-        drawMasks = new ArrayList<Mat>();
-    	
-    	// INITIALIZATION FOR STEREORECTIFY
+        // INITIALIZATION FOR STEREORECTIFY
         
         // INPUT VARIABLES
         
@@ -135,34 +139,13 @@ public class FeatureManager implements CvCameraViewListener2 {
 
     public void onCameraViewStopped() {}
     
-    private MatOfPoint2f prevFeatures;
-    private Mat prevImage;
-    private Mat currentImage;
     
-    private List<Mat> drawMasks;
-    
-    private final Scalar RED = new Scalar(255,0,0);
-     private final Scalar BLACK = new Scalar(0);
-    private final Scalar WHITE = new Scalar(255);
-    
-    private int frames = 0;
-    private int detectInterval = 5;
-    
-    // NOTE: just temporary variables
-    private int triPointsKeep = 5;
-    private int framesFade = 3;
     
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Log.d("VINS", "onCameraFrame");
-        
-        Mat image = inputFrame.gray();
-        
-        currentImage = image;
-        
+        currentImage= inputFrame.gray();
         frames++;
-        image.copyTo(prevImage);
-        Log.d("Next", prevFeatures.size() + "");
-        return image;
+        return currentImage;
     }
     
     private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
@@ -175,86 +158,118 @@ public class FeatureManager implements CvCameraViewListener2 {
         
         return new MatOfPoint2f(pointsArray);
     }
+        
+    private MatOfPoint2f prevCurrent;
+    private MatOfPoint2f prevNew;
     
-    class FeatureUpdate {
-    	
-    }
+    private Mat prevImage;
+    private Mat currentImage;
     
-    public void getFeatureUpdate() {
+    private int frames = 0;
+    
+    
+    public FeatureUpdate getFeatureUpdate() {
     	Log.d(TAG, "Getting Feature Update");
     	
-    	Mat image = currentImage;
-        
-        Mat modifiedImage = image.clone();
-        Mat detectMask = image.clone();
-        Mat drawMask = image.clone();
+    	Mat detectMask = currentImage.clone();
         detectMask.setTo(WHITE);
         
-        if (prevFeatures.size().height > 0) {
-            MatOfByte status = new MatOfByte();
+        FeatureUpdate update = new FeatureUpdate();
+        
+        if (prevCurrent.size().height > 0) {
+            
+        	//// Optical Flow
+        	
+        	MatOfByte status = new MatOfByte();
             MatOfFloat err = new MatOfFloat();
             MatOfPoint2f nextFeatures = new MatOfPoint2f();
-            Video.calcOpticalFlowPyrLK(prevImage, image, prevFeatures, nextFeatures, status, err);
             
-            List<Point> oldPoints = prevFeatures.toList();
+            int prevCurrentSize = (int) prevCurrent.size().height; // whut
+            if (prevNew != null && prevNew.size().height > 0)
+            	prevCurrent.push_back(prevNew); // combined
+            
+            Video.calcOpticalFlowPyrLK(prevImage, currentImage, prevCurrent, nextFeatures, status, err);
+            
+            List<Point> oldPoints = prevCurrent.toList();
             List<Point> newPoints = nextFeatures.toList();
             List<Point> goodOldList = new ArrayList<>();
             List<Point> goodNewList = new ArrayList<>();
             List<Integer> badPointsIndex = new ArrayList<>();
             
-            int i = 0;
-            Mat imageLines = image.clone();
+            // Use status to split good from bad  
+            
+            int index = 0;
+            int currentSize = 0;
             for (Byte item : status.toList()) {
                 if (item.intValue() == 1) {
-                    goodOldList.add(oldPoints.get(i));
-                    goodNewList.add(newPoints.get(i));
-                    Core.circle(detectMask, newPoints.get(i), 10, BLACK, -1); // mask out during detection         
+                	if (index < prevCurrentSize)
+                		currentSize++;
+                	goodOldList.add(oldPoints.get(index));
+                    goodNewList.add(newPoints.get(index));
+                	Core.circle(detectMask, newPoints.get(index), 10, BLACK, -1); // mask out during detection         
                 }
                 else {
-                    badPointsIndex.add(Integer.valueOf(i));
+                    badPointsIndex.add(Integer.valueOf(index));
                 }
-                i++;
+                index++;
             }
-            Core.add(imageLines, drawMask, modifiedImage);
+            
+            // Convert from List to OpenCV matrix for triangulation
             MatOfPoint2f goodOld = new MatOfPoint2f();
             MatOfPoint2f goodNew = new MatOfPoint2f();
+            
             goodOld.fromList(goodOldList);
             goodNew.fromList(goodNewList);
             
-            goodNew.copyTo(prevFeatures);
-
-            // TRIANGULATION ???
+            
+            //// TRIANGULATION ???
             
             // TODO: might want to initialize points4D with a large Nx4 Array
             //		 so that both memory and time will be saved (instead of reallocation each time)
             //		 consider converting to Euclidean, but maybe no need.
             
-            points4D = Mat.zeros(1, 4, CvType.CV_64F);
             
-            if(!goodOld.empty() && !goodOld.empty())
+            if(!goodOld.empty() && !goodNew.empty()) {
+            	points4D = Mat.zeros(1, 4, CvType.CV_64F);
             	Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
-            
-            // Only dumps a few sets of triangulation results for now
-            if (triPointsKeep > 0){
-                Log.i("Array Sizes", goodOld.size() + " " + goodNew.size() + " " + points4D.size());
-                Log.i("Old Points", goodOld.dump());
-                Log.i("New Points", goodNew.dump());
-            	Log.i("Triangulated Points", points4D.dump());
-            	triPointsKeep--;
+            	
+            	//Mat points3D = new Mat();
+            	//Calib3d.convertPointsFromHomogeneous(points4D, points3D);
+            	
+            	// TODO verify this shit
+            	// Split points to current and new PointDouble
+                List<PointDouble> current2d = new ArrayList<>();
+                List<PointDouble> new2d = new ArrayList<>();
+                for (int i = 0; i < goodOld.height(); i++) {
+                	double x = points4D.get(0, i)[0];
+                	double y = points4D.get(1, i)[0];
+                	
+                	PointDouble point = new PointDouble(x, y);
+                	if (i < currentSize) {
+                		current2d.add(point);
+                	}
+                	else {
+                		new2d.add(point);
+                	}
+                }
+                
+                update.currentPoints = current2d;
+                update.newPoints = new2d;
             }
+            update.badPointsIndex = badPointsIndex;
+            goodNew.copyTo(prevCurrent);
         }
         
-        if (frames % detectInterval == 0) {
-            MatOfKeyPoint featureMat = new MatOfKeyPoint();
-            detector.detect(image, featureMat, detectMask);
-            if (featureMat.size().height > 0) {
-                MatOfPoint2f newFeatures = convert(featureMat);
-                prevFeatures.push_back(newFeatures);
-            }
-        }
         
-        image.copyTo(prevImage);
-        Log.d("Next", prevFeatures.size() + "");
+        // Detect new points based on optical flow mask
+        MatOfKeyPoint newFeatures = new MatOfKeyPoint();
+        detector.detect(currentImage, newFeatures, detectMask);
+        if (newFeatures.size().height > 0) {
+            prevNew = convert(newFeatures);
+        }
+    
+        currentImage.copyTo(prevImage);
+        return update;
     }
 }
 
