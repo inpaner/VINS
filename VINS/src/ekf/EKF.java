@@ -149,10 +149,10 @@ public class EKF{
 	/* Predict the distance and heading to the specified feature */
 	double predictedDistanceX = featureCoords.getX() - deviceCoords.getX();
 	double predictedDistanceY = featureCoords.getY() - deviceCoords.getY();
+	double predictedDistance = Math.sqrt(Math.pow(predictedDistanceX,2) + Math.pow(predictedDistanceY, 2));
+	double predictedHeading = (Math.atan(predictedDistanceY / predictedDistanceX)) - this.getHeading();
 	
 	//Still need to add measurement noise to these two variables
-	double predictedDistance = Math.sqrt(Math.pow(predictedDistanceX,2) + Math.pow(predictedDistanceY, 2));
-	double predictedHeading = Math.atan(predictedDistanceY / predictedDistanceX);
 	double[][] differenceVector = new double[2][1];
 	differenceVector[0][0] = observedDistance - predictedDistance;
 	differenceVector[1][0] = observedHeading - predictedHeading;
