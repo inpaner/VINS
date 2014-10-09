@@ -10,9 +10,12 @@ public class EKF{
     private ArrayList<ArrayList<Double>> P; // Covariance Matrix
     private int numFeatures;
         
-    private Matrix jrMatrix;
+    /* These are jacobians of the prediction model used when adding a new feature in the covariance matrix. 
+     * They are updated every INS update because they are based on displacement and heading. 
+     */
+    private Matrix jrMatrix; 
     private Matrix jzMatrix;
-    private Matrix vrvMatrix;
+ 
     
     
     public EKF(){
@@ -23,8 +26,9 @@ public class EKF{
 	jzMatrix = this.createJZMatrix(0, 0, 0);
     }
     
+    /********** Getters **********/
     public ArrayList<ArrayList<Double>> getP(){
-	return P;
+	return (ArrayList<ArrayList<Double>>) P.clone();
     }
     
     public DevicePose getCurrDevicePose(){
@@ -32,6 +36,22 @@ public class EKF{
 	DevicePose pose = new DevicePose(deviceCoords.getX(), deviceCoords.getY(), 0, getHeading());
 	return pose;
     }
+    
+    private PointDouble getDeviceCoords(){
+	PointDouble point = new PointDouble(X.get(0), X.get(1)); 
+	return point;
+    }
+    
+    private PointDouble getFeatureCoordsFromStateVector(int featureIndex){
+
+	int stateVectorIndexOfFeature = 3 + featureIndex * 2;
+	double targetFeatureX = X.get(stateVectorIndexOfFeature);
+	double targetFeatureY = X.get(stateVectorIndexOfFeature+1);
+	
+	PointDouble point = new PointDouble(targetFeatureX, targetFeatureY); 
+	
+	return point;
+    } 
     
     private double getHeading(){
 	return X.get(2);
@@ -55,13 +75,11 @@ public class EKF{
 	X.set(2, headingRadians);
 	
 	//Update the upper left 3x3 sub-covariance matrix
-	double[][] Q = createQ(displacementX, displacementY, displacementHeading);
-	Matrix qMatrix = new Matrix(Q);
+	Matrix qMatrix = createQ(displacementX, displacementY, displacementHeading);
 	
 	Matrix pPhiMatrix = this.extractPPhi();
 	
-	double[][] A = createA(displacementX, displacementY); // Jacobian of Prediction Model
-	Matrix aMatrix = new Matrix(A);
+	Matrix aMatrix = createA(displacementX, displacementY); // Jacobian of Prediction Model
 	
 	// pPhi = A * pPphi * A^T + Q
 	pPhiMatrix = aMatrix.times(pPhiMatrix).times(aMatrix.transpose()).plus(qMatrix);
@@ -94,6 +112,14 @@ public class EKF{
     
     private Matrix extractPPhi(){
 	return this.extractSubMatrix(0, 2, 0, 2);
+    }
+    
+    private Matrix extractSubMatrix(int startRow, int endRow, int startCol, int endCol){
+   	double[][] sub = new double[endRow-startRow+1][endCol-startCol+1];
+   	for(int i=startRow; i<=endRow; i++)
+   	    for(int j=startCol; j<=endCol; j++)
+   		sub[i-startRow][j-startCol] = P.get(i).get(j);
+   	 return new Matrix(sub);
     }
     
     
@@ -139,13 +165,12 @@ public class EKF{
 	Matrix pMatrix = new Matrix((double[][])P.toArray());
 	Matrix hphMatrix = hMatrix.times(pMatrix).times(hMatrix.transpose());
 	
-	vrvMatrix = this.createVRVMatrix(r);
+	Matrix vrvMatrix = this.createVRVMatrix(r);
 	Matrix innovationMatrix = hphMatrix.plus(vrvMatrix);
 	
 	Matrix kalmanGainMatrix = pMatrix.times(hMatrix.transpose()).times(innovationMatrix.inverse());
 	
 
-	
 	/* Predict the distance and heading to the specified feature */
 	double predictedDistanceX = featureCoords.getX() - deviceCoords.getX();
 	double predictedDistanceY = featureCoords.getY() - deviceCoords.getY();
@@ -223,6 +248,12 @@ public class EKF{
 	    }
 	}
 	
+	//Create vrvMatrix
+	PointDouble deviceCoords = this.getDeviceCoords();
+	PointDouble featureCoords = new PointDouble(x,y);
+	double distance = deviceCoords.computeDistanceTo(featureCoords);
+	Matrix vrvMatrix = createVRVMatrix(distance); 
+	
 	Matrix lowerRightMatrix = jrMatrix.times(pPhiMatrix).times(jrMatrix.transpose()).plus(jzMatrix.times(vrvMatrix).times(jzMatrix.transpose()));
 	toAdd.add(lowerRightMatrix);
 
@@ -239,59 +270,7 @@ public class EKF{
 	}
     }
     
-    private PointDouble getDeviceCoords(){
-	PointDouble point = new PointDouble(X.get(0), X.get(1)); 
-	return point;
-    }
-    
-    private PointDouble getFeatureCoordsFromStateVector(int featureIndex){
-
-	int stateVectorIndexOfFeature = 3 + featureIndex * 2;
-	double targetFeatureX = X.get(stateVectorIndexOfFeature);
-	double targetFeatureY = X.get(stateVectorIndexOfFeature+1);
-	
-	PointDouble point = new PointDouble(targetFeatureX, targetFeatureY); 
-	
-	return point;
-    } 
-    
-    private Matrix extractSubMatrix(int startRow, int endRow, int startCol, int endCol){
-	double[][] sub = new double[endRow-startRow+1][endCol-startCol+1];
-	for(int i=startRow; i<=endRow; i++)
-	    for(int j=startCol; j<=endCol; j++)
-		sub[i-startRow][j-startCol] = P.get(i).get(j);
-	 return new Matrix(sub);
-    }
-    
-    private Matrix createVRVMatrix(double distance){
-	Random rand = new Random();
-	
-	double[][] vrv = new double[2][2];
-	//Variance of 0.01 included this way according to http://www.javapractices.com/topic/TopicAction.do?Id=62
-	vrv[0][0] = distance*rand.nextGaussian()*0.01; 
-	vrv[1][1] = 1; 
-	return new Matrix(vrv);	
-    }
-    
-    private Matrix createStateVectorMatrix(){
-	double[][] x= new double[X.size()][1];
-	for(int i=0; i<X.size(); i++)
-	    x[i][0] = X.get(i);
-	
-	return new Matrix(x);
-    }
-    
-    private Matrix createJRMatrix(double displacementX, double displacementY){
-	double[][] jr = {{1, 0, -1*displacementY}, {0, 1, displacementX}};
-	return new Matrix(jr);
-    }
-    
-    private Matrix createJZMatrix(double displacementX, double displacementY, double headingRadians){
-	double[][] jz = {{Math.cos(headingRadians), -1*displacementY}, {Math.sin(headingRadians), displacementX}};
-	return new Matrix(jz);
-    }
-    
-    /********** Initializations **********/
+    /********** Methods for Creating Matrices **********/
   
     //Initializes the state vector
     private ArrayList<Double> createX(){
@@ -309,7 +288,10 @@ public class EKF{
 	for(int i=0;i<3;i++){
 	    ArrayList<Double> currRow = new ArrayList<Double>();
 	    for(int j=0;j<3;j++){
-		currRow.add(0.0);
+		if(i!=j)
+		    currRow.add(0.0);
+		else
+		    currRow.add(0.1);
 	    }
 	    P.add(currRow);
 	}
@@ -318,22 +300,53 @@ public class EKF{
     }
     
     //Returns the Jacobian matrix A based on the given deltaX and deltaY
-    private double[][] createA(double deltaX, double deltaY){
+    private Matrix createA(double deltaX, double deltaY){
 	double[][] A = {{1, 0, -1*deltaY}, //rightmost 0 is to be replaced by - delta y
 			{0, 1, deltaX}, //rightmost 0 is to be replaced by delta x
 			{0, 0, 1}};
 	
-	return A;
+	return new Matrix(A);
     }
      
     //Returns the Process Noise Q based on the given deltaX and deltaY, and deltaT in radians
-    private double[][] createQ(double dX, double dY, double dT){
+    private Matrix createQ(double dX, double dY, double dT){
 	double c = 0.1; // will change this accdg to trial and error (accdg to SLAM for dummies)
 	double[][] Q = {{c*dX*dX, c*dX*dY, c*dX*dT},
 			{c*dY*dX, c*dY*dY, c*dY*dT},
 			{c*dT*dX, c*dT*dY, c*dT*dT}};
 	
-	return Q;
+	return new Matrix(Q);
     }
     
+    //The measurement noise matrix
+    private Matrix createVRVMatrix(double distance){
+   	Random rand = new Random();
+   	
+   	double[][] vrv = new double[2][2];
+   	//Variance of 0.01 included this way according to http://www.javapractices.com/topic/TopicAction.do?Id=62
+   	vrv[0][0] = distance*rand.nextGaussian()*0.01; 
+   	vrv[1][1] = 1; 
+   	return new Matrix(vrv);	
+    }
+       
+    //Just converts the current state vector to a Matrix object
+    private Matrix createStateVectorMatrix(){
+   	double[][] x= new double[X.size()][1];
+   	for(int i=0; i<X.size(); i++)
+   	    x[i][0] = X.get(i);
+   	
+   	return new Matrix(x);
+    }      
+       
+    //Creates some Jacobian matrix used when adding a new feature to the covariance matrix
+    private Matrix createJRMatrix(double displacementX, double displacementY){
+   	double[][] jr = {{1, 0, -1*displacementY}, {0, 1, displacementX}};
+   	return new Matrix(jr);
+    }
+       
+    //Creates some Jacobian matrix used when adding a new feature to the covariance matrix
+    private Matrix createJZMatrix(double displacementX, double displacementY, double headingRadians){
+   	double[][] jz = {{Math.cos(headingRadians), -1*displacementY}, {Math.sin(headingRadians), displacementX}};
+   	return new Matrix(jz);
+    }
 }
