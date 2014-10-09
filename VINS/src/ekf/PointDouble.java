@@ -26,6 +26,12 @@ public class PointDouble {
         this.y = y;
     }
     
+    public double computeDistanceTo(PointDouble other){
+	if(other == null)
+	    return -1;
+	
+	return Math.sqrt(Math.pow(x-other.x,2) + Math.pow(y-other.y,2));
+    }
     
     
 }
