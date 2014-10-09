@@ -39,7 +39,6 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     
     // TODO: Change this to either VideoCapture or another alternative
     private CameraBridgeViewBase mOpenCvCameraView;
-    private TextView textBox;
     private int totalUpdates = 0;
     
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
@@ -76,7 +75,6 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         Log.i(TAG, "Trying to load OpenCV library");
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.surface_view);
-        textBox = (TextView) findViewById(R.id.counter);
         
         // http://stackoverflow.com/a/17872107
         //mOpenCvCameraView.setMaxFrameSize(720, 1280); // sets to 720 x 480
@@ -88,23 +86,21 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
     
     // http://stackoverflow.com/a/7433510
      
+
     private void updateFPS() {
-        textBox.setText("FPS: " + totalUpdates);
         Log.d("FPS printing", ""+totalUpdates);
         totalUpdates = 0;
     }
     
     @Override
-    public void onPause()
-    {
+    public void onPause() {
         super.onPause();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
     }
 
     @Override
-    public void onResume()
-    {
+    public void onResume() {
         super.onResume();
         if (!OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_2, this, mLoaderCallback))
         {
@@ -298,7 +294,7 @@ public class FastActivity extends Activity implements CvCameraViewListener2 {
         frames++;
         image.copyTo(prevImage);
         Log.d("Next", prevFeatures.size() + "");
-        return modifiedImage;
+        return modifiedImage.setTo(BLACK);
     }
     
     private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
