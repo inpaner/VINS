@@ -167,7 +167,7 @@ public class FeatureManager implements CvCameraViewListener2 {
     
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         Log.d("VINS", "onCameraFrame");
-        currentImage= inputFrame.gray();
+        currentImage = inputFrame.gray();
         frames++;
         return currentImage;
     }

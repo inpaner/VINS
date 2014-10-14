@@ -12,8 +12,11 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.os.Bundle;
+import android.util.Log;
 import ekf.EKF;
+import ekf.PointDouble;
 import features.FeatureManager;
+import features.FeatureUpdate;
 
 public class DriverActivity extends Activity implements SensorEventListener {
 
@@ -54,13 +57,34 @@ public class DriverActivity extends Activity implements SensorEventListener {
 
 	private void runOneCycle() {
 		/* TRIGGER MOTION ESTIMATION */
-		DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
-
-		/* PASS DISTANCE & HEADING TO EKF.insUpdate() */
-		ekf.predictFromINS(devicePose.getXYDistance(), devicePose.getHeading());
-
-		/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES */
 		
+		try { // TODO: temporary fix for the opencv thing is just exception handling
+			
+			DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
+
+			/* PASS DISTANCE & HEADING TO EKF.insUpdate() */
+			ekf.predictFromINS(devicePose.getXYDistance(), devicePose.getHeading());
+
+			/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES */
+			FeatureUpdate update = featureManager.getFeatureUpdate();
+
+			for (Integer index : update.getBadPointsIndex())
+				ekf.deleteFeature(index);
+
+			int i = 0;
+			for (PointDouble featpos : update.getCurrentPoints())
+				ekf.updateFromReobservedFeature(i++, featpos.getX(), featpos.getY());
+
+			for (PointDouble featpos : update.getNewPoints())
+				ekf.addFeature(featpos.getX(), featpos.getY());
+
+			devicePose = ekf.getCurrDevicePose();
+			Log.i("Driver", devicePose.get_xPos() + "\n" + devicePose.get_yPos() + "\n" + devicePose.get_zPos() + "\n" + devicePose.getHeading());
+		} catch (Exception e) { 
+			// if anything goes wrong we cry
+			
+			Log.i("Driver", e.toString());
+		}
 		/* LOOP THROUGH THE RETURNED FEATURES */
 		/* IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex) */
 		/*

@@ -2,6 +2,7 @@ package motionestimation;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.concurrent.Semaphore;
 
 public class IntegrateMotionEstimation implements MotionEstimation {
 	// timer counters
@@ -21,8 +22,17 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 	// overflow data, add when next time
 	ArrayList<Double> overflow = new ArrayList<Double>();
 	
+	// TODO: temporary concurrency fix
+	Semaphore mutex = new Semaphore(1);
+	
 	// format is [accx y z gyrox y z]
 	public void inputData(SensorEntry s) {
+		try {
+			mutex.acquire();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		if (start == -1)
 			startTimer();
 		else
@@ -45,9 +55,16 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 			overflow.add(s.getOrient_y());
 			overflow.add(s.getOrient_z());
 		}
+		mutex.release();
 	}
 	
 	public DevicePose getHeadingAndDisplacement() {
+		try {
+			mutex.acquire();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		// D O U B L E I N T E G R A T I O N
 		double[] pos = new double[3];
 		
@@ -96,6 +113,7 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		start = -1;
 		curr = -1;
 		
+		mutex.release();
 		return new DevicePose(pos[0], pos[1], pos[2], heading);
 	}
 
