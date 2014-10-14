@@ -99,11 +99,29 @@ public class EKF{
 	
 	for(int i=0;i<numFeatures;i++){
 	    Matrix PriMatrix = extractPri(i);
-	    PriMatrix = PriMatrix.times(aMatrix);
+	    PriMatrix = aMatrix.times(PriMatrix);
+	    
+	    int targetStartRowIndex = 0;
+	    int targetStartColIndex = 3 + i*2;
+	    
 	    
 	    for(int j=0;j<PriMatrix.getRowDimension(); j++)
 	    	for(int k=0;k<PriMatrix.getColumnDimension();k++)
-	    	    P.get(j).set(k, PriMatrix.get(j, k));
+	    	    P.get(targetStartRowIndex + j).set(targetStartColIndex + k, PriMatrix.get(j, k));
+	    
+	    //Also update the transpose
+	    Matrix PriMatrixTranspose = PriMatrix.transpose();
+	    
+	    //swap row and col
+	    int temp = targetStartRowIndex;
+	    targetStartRowIndex = targetStartColIndex;
+	    targetStartColIndex = temp;
+	    
+	    for(int j=0;j<PriMatrixTranspose.getRowDimension(); j++)
+	    	for(int k=0;k<PriMatrixTranspose.getColumnDimension();k++)
+	    		P.get(targetStartRowIndex + j).set(targetStartColIndex + k, PriMatrixTranspose.get(j, k));
+	    
+	    
 	}   
 	
 	//Update Jr and Jz matrices
@@ -114,7 +132,7 @@ public class EKF{
     private Matrix extractPri(int index){
 	int startRowIndex = 3 + index*2;
 	
-	return this.extractSubMatrix(startRowIndex, startRowIndex+1, 0, 2);
+	return this.extractSubMatrix(0, 2, startRowIndex, startRowIndex+1);
     }
     
     private Matrix extractPPhi(){
