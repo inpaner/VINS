@@ -194,7 +194,7 @@ public class EKF{
 	
 	//Calculate innovation matrix
 	Matrix hMatrix = new Matrix(H);
-	Matrix pMatrix = new Matrix((double[][])P.toArray());
+	Matrix pMatrix = this.extractSubMatrix(0, P.size()-1, 0, P.size()-1);
 	Matrix hphMatrix = hMatrix.times(pMatrix).times(hMatrix.transpose());
 	
 	Matrix vrvMatrix = this.createVRVMatrix(r);
@@ -306,6 +306,7 @@ public class EKF{
 
 		numFeatures++;
     }
+    
     
     /********** Methods for Creating Matrices **********/
   
