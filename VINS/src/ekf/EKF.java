@@ -159,7 +159,7 @@ public class EKF{
 	
 	double observedDistance = deviceCoords.computeDistanceTo(observedFeatureCoords);
 	double observedHeading = Math.atan(
-			(observedFeatureCoords.getY() - deviceCoords.getY())/(observedFeatureCoords.getX()-deviceCoords.getX()));
+			(observedFeatureCoords.getY() - deviceCoords.getY())/(observedFeatureCoords.getX()-deviceCoords.getX())) - this.getHeading();
 	
 	
 	
