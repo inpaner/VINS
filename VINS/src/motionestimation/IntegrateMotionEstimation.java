@@ -68,17 +68,22 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		// D O U B L E I N T E G R A T I O N
 		double[] pos = new double[3];
 		
-		// x = a*t^2/4
+		// x = a*t^2/2 (t is in seconds)
 		for (Double d : accx)
 			pos[0] += d;
+		pos[0] /= accx.size();
+		
 		for (Double d : accy)
 			pos[1] += d;
+		pos[1] /= accy.size();
+		
 		for (Double d : accz)
 			pos[2] += d;
+		pos[2] /= accz.size();
 		
-		pos[0] *= (curr-start)*(curr-start)/4000.0;
-		pos[1] *= (curr-start)*(curr-start)/4000.0;
-		pos[2] *= (curr-start)*(curr-start)/4000.0;
+		pos[0] *= Math.pow((curr-start),2)/2000;
+		pos[1] *= Math.pow((curr-start),2)/2000;
+		pos[2] *= Math.pow((curr-start),2)/2000;
 		
 		// average all the gyroscope readings
 		int numInstances = orientx.size();
