@@ -223,8 +223,6 @@ public class EKF{
     //Method for adding a feature to the sate vector and covariance matrix.
     public void addFeature(double x, double y){
 	
-		numFeatures++;
-		
 		//add to state vector
 		X.add(x);
 		X.add(y);
@@ -241,6 +239,7 @@ public class EKF{
 		
 		toAdd.add(lowerLeftMatrix);
 		
+		//numFeatures still holds the number of features not counting this new feature to be added
 		for(int i=0;i<numFeatures;i++){
 			 //extract the sub-matrix above the new matrix's location
 		    Matrix subMatrix = this.extractSubMatrix(0, 2, 3 + i*2, 4 + i*2);
@@ -283,6 +282,8 @@ public class EKF{
 		    }
 		}
 		
+
+		numFeatures++;
     }
     
     /********** Methods for Creating Matrices **********/
