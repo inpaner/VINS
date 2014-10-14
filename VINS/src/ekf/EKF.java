@@ -16,7 +16,10 @@ public class EKF{
     private Matrix jrMatrix; 
     private Matrix jzMatrix;
  
-    
+    /* Constants */
+    public static final double VRV_VARIANCE = 0.01;
+    public static final double P_DIAGONAL_INITIAL = 0.1;
+    public static final double Q_NOISE = 0.1;
     
     public EKF(){
 	X = createX();
@@ -307,7 +310,7 @@ public class EKF{
 		if(i!=j)
 		    currRow.add(0.0);
 		else
-		    currRow.add(0.1);
+		    currRow.add(P_DIAGONAL_INITIAL);
 	    }
 	    P.add(currRow);
 	}
@@ -326,7 +329,7 @@ public class EKF{
      
     //Returns the Process Noise Q based on the given deltaX and deltaY, and deltaT in radians
     private Matrix createQ(double dX, double dY, double dT){
-	double c = 0.1; // will change this accdg to trial and error (accdg to SLAM for dummies)
+	double c = Q_NOISE; // will change this accdg to trial and error (accdg to SLAM for dummies)
 	double[][] Q = {{c*dX*dX, c*dX*dY, c*dX*dT},
 			{c*dY*dX, c*dY*dY, c*dY*dT},
 			{c*dT*dX, c*dT*dY, c*dT*dT}};
@@ -340,7 +343,7 @@ public class EKF{
    	
    	double[][] vrv = new double[2][2];
    	//Variance of 0.01 included this way according to http://www.javapractices.com/topic/TopicAction.do?Id=62
-   	vrv[0][0] = distance*rand.nextGaussian()*0.01; 
+   	vrv[0][0] = distance*rand.nextGaussian()*VRV_VARIANCE; 
    	vrv[1][1] = 1; 
    	return new Matrix(vrv);	
     }
