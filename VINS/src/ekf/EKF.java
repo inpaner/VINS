@@ -126,10 +126,17 @@ public class EKF{
     /********** V-INS Update **********/
     
     //Method for correcting the state vector based on re-observed features.
-    public void updateFromReobservedFeature(int featureIndex, int observedDistance, int observedHeading){
+    public void updateFromReobservedFeature(int featureIndex, double fX, double fY){
 	
 	PointDouble featureCoords = this.getFeatureCoordsFromStateVector(featureIndex);
 	PointDouble deviceCoords = this.getDeviceCoords();
+	PointDouble observedFeatureCoords = new PointDouble(fX,fY);
+	
+	double observedDistance = deviceCoords.computeDistanceTo(observedFeatureCoords);
+	double observedHeading = Math.atan(
+			(observedFeatureCoords.getY() - deviceCoords.getY())/(observedFeatureCoords.getX()-deviceCoords.getX()));
+	
+	
 	
 	/* Calculate the Kalman Gain */
 	
