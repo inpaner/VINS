@@ -165,39 +165,14 @@ public class EKF{
 	
 	/* Calculate the Kalman Gain */
 	
-	//Set-up H for the specified feature
-	double[][] H = new double[2][3+numFeatures*2];
-	
-	double r = observedDistance; //unsure about this. might be predicted distance
-	double A = (featureCoords.getX() - deviceCoords.getX())/r;
-	double B = (featureCoords.getY() - deviceCoords.getY())/r;
-	double C = 0;
-	double D = (featureCoords.getY() - deviceCoords.getY())/(r*r);
-	double E = (featureCoords.getX() - deviceCoords.getX())/(r*r);
-	double F = -1;
-	
-	
-	H[0][0] = A;
-	H[0][1] = B;
-	H[0][2] = C;
-	H[1][0] = D;
-	H[1][1] = E;
-	H[1][2] = F;
-	
-	int targetFeatureIndex = 3 + 2*featureIndex;
-	
-	H[0][targetFeatureIndex] = -1*A;
-	H[0][targetFeatureIndex+1] = -1*B;
-	H[1][targetFeatureIndex] = -1*D;
-	H[1][targetFeatureIndex+1] = -1*E;
-	
+
 	
 	//Calculate innovation matrix
-	Matrix hMatrix = new Matrix(H);
+	Matrix hMatrix = this.createH(observedDistance, featureIndex, observedFeatureCoords, deviceCoords);
 	Matrix pMatrix = this.extractSubMatrix(0, P.size()-1, 0, P.size()-1);
 	Matrix hphMatrix = hMatrix.times(pMatrix).times(hMatrix.transpose());
 	
-	Matrix vrvMatrix = this.createVRVMatrix(r);
+	Matrix vrvMatrix = this.createVRVMatrix(observedDistance);
 	Matrix innovationMatrix = hphMatrix.plus(vrvMatrix);
 	
 	Matrix kalmanGainMatrix = pMatrix.times(hMatrix.transpose()).times(innovationMatrix.inverse());
@@ -310,6 +285,37 @@ public class EKF{
     
     /********** Methods for Creating Matrices **********/
   
+    private Matrix createH(double observedDistance, int featureIndex, PointDouble featureCoords, PointDouble deviceCoords){
+    	//Set-up H for the specified feature
+    	double[][] H = new double[2][3+numFeatures*2];
+    	
+    	double r = observedDistance; //unsure about this. might be predicted distance
+    	double A = (featureCoords.getX() - deviceCoords.getX())/r;
+    	double B = (featureCoords.getY() - deviceCoords.getY())/r;
+    	double C = 0;
+    	double D = (featureCoords.getY() - deviceCoords.getY())/(r*r);
+    	double E = (featureCoords.getX() - deviceCoords.getX())/(r*r);
+    	double F = -1;
+    	
+    	
+    	H[0][0] = A;
+    	H[0][1] = B;
+    	H[0][2] = C;
+    	H[1][0] = D;
+    	H[1][1] = E;
+    	H[1][2] = F;
+    	
+    	int targetFeatureIndex = 3 + 2*featureIndex;
+    	
+    	H[0][targetFeatureIndex] = -1*A;
+    	H[0][targetFeatureIndex+1] = -1*B;
+    	H[1][targetFeatureIndex] = -1*D;
+    	H[1][targetFeatureIndex+1] = -1*E;
+    	
+    	
+    	return new Matrix(H);
+    }
+    
     //Initializes the state vector
     private ArrayList<Double> createX(){
 	ArrayList<Double> X = new ArrayList<Double>();

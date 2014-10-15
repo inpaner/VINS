@@ -14,6 +14,10 @@ public class DevicePose {
 		heading = h;
 	}
 
+	public String toString(){
+		return "("+xPos+","+yPos+")";
+	}
+	
 	public double getXYDistance(){
 	    return Math.sqrt(Math.pow(xPos, 2)+Math.pow(yPos, 2));
 	}

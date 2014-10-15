@@ -6,6 +6,7 @@ import java.util.ArrayList;
 
 import motionestimation.DevicePose;
 import android.test.AndroidTestCase;
+import android.util.Log;
 import ekf.EKF;
 
 public class EKFTests extends AndroidTestCase {
@@ -103,6 +104,15 @@ public class EKFTests extends AndroidTestCase {
     	
     }
     
+    //This test just checks if re-observing one feature works
+    public void testReobserveFeature(){
+    	Log.d("VINS", ekf.getCurrDevicePose().toString());
+    	ekf.addFeature(0, 1);
+    	ekf.predictFromINS(Math.sqrt(2), Math.PI/4);
+    	Log.d("VINS", ekf.getCurrDevicePose().toString());
+    	ekf.updateFromReobservedFeature(0, 0.1, 1.1);
+    	Log.d("VINS", ekf.getCurrDevicePose().toString());
+    }
     
     private double round2Decimals(double value){
     	return roundDecimals(value, 2);
