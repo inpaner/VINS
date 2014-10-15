@@ -12,110 +12,92 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 	long start = -1;
 	long curr = -1;
 
-	// accelerometer data
-	ArrayList<Double> accx = new ArrayList<Double>();
-	ArrayList<Double> accy = new ArrayList<Double>();
-	ArrayList<Double> accz = new ArrayList<Double>();
-
-	// gyroscope data
-	ArrayList<Double> orientx = new ArrayList<Double>();
-	ArrayList<Double> orienty = new ArrayList<Double>();
-	ArrayList<Double> orientz = new ArrayList<Double>();
-
+	// sensor data
+	ArrayList<SensorEntry> entries = new ArrayList<SensorEntry>();
+	
 	// overflow data, add when next time
-	ArrayList<Double> overflow = new ArrayList<Double>();
+	ArrayList<SensorEntry> overflow = new ArrayList<SensorEntry>();
 
+	
 	// TODO: temporary concurrency fix
 	Semaphore mutex = new Semaphore(1);
 
-	// format is [accx y z gyrox y z]
 	public void inputData(SensorEntry s) {
-		try {
-			mutex.acquire();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 		if (start == -1)
 			startTimer();
 		else
 			curr = Calendar.getInstance().getTimeInMillis();
 
-		if (start + 333 >= curr) {
-			accx.add(s.getAcc_x());
-			accy.add(s.getAcc_y());
-			accz.add(s.getAcc_z());
-
-			orientx.add(s.getOrient_x());
-			orienty.add(s.getOrient_y());
-			orientz.add(s.getOrient_z());
-		} else {
-			overflow.add(s.getAcc_x());
-			overflow.add(s.getAcc_y());
-			overflow.add(s.getAcc_z());
-			overflow.add(s.getOrient_x());
-			overflow.add(s.getOrient_y());
-			overflow.add(s.getOrient_z());
+		try {
+			mutex.acquire();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
+		
+		if (start + 333 >= curr) {
+			entries.add(s);
+		} else {
+			overflow.add(s);
+		}
+		
 		mutex.release();
 	}
 
 	public DevicePose getHeadingAndDisplacement() throws Exception {
-		try {
-			mutex.acquire();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
+		
+		double heading;
 		double orientXAvg, orientYAvg, orientZAvg;
 
 		orientXAvg = 0;
-		for (Double d : orientx)
-			orientXAvg += d;
-
-		if (orientx.size() != 0)
-			orientXAvg /= orientx.size();
-
-		orientXAvg = Math.toRadians(orientXAvg);
-
 		orientYAvg = 0;
-		for (Double d : orienty)
-			orientYAvg += d;
-
-		if (orienty.size() != 0)
-			orientYAvg /= orienty.size();
-
-		orientYAvg = Math.toRadians(orientYAvg);
-
 		orientZAvg = 0;
-		for (Double d : orientz)
-			orientZAvg += d;
+		
+		try {
+			mutex.acquire();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		
+		for (SensorEntry s : entries){
+			orientXAvg += s.getOrient_x();
+			orientYAvg += s.getOrient_y();
+			orientZAvg += s.getOrient_z();
+		}
+		
+		if (entries.size() != 0) {
+			orientXAvg /= entries.size();
+			orientYAvg /= entries.size();
+			orientZAvg /= entries.size();
+		}
+		
+		mutex.release();
 
-		if (orientz.size() != 0)
-			orientZAvg /= orientz.size();
-
+		heading = orientXAvg;
+		orientXAvg = Math.toRadians(orientXAvg);
+		orientYAvg = Math.toRadians(orientYAvg);
 		orientZAvg = Math.toRadians(orientZAvg);
 
 		double cosVal, sinVal;
 
+		// TODO: might need to double check this
+		// orientX is actually rotation along Z, hence rotZArr
+		// orientY is the rotation along X, hence rotYArr
+		// orientZ is rotation along Y, hence rotZArr
+		
 		cosVal = Math.cos(orientXAvg);
 		sinVal = Math.sin(orientXAvg);
-		double[][] rotXArr = { { cosVal, -sinVal, 0 }, { sinVal, cosVal, 0 }, { 0, 0, 1 } };
-		Matrix rotX = new Matrix(rotXArr);
+		double[][] rotZArr = { { cosVal, -sinVal, 0 }, { sinVal, cosVal, 0 }, { 0, 0, 1 } };
+		Matrix rotZ = new Matrix(rotZArr);
 
 		cosVal = Math.cos(orientYAvg);
 		sinVal = Math.sin(orientYAvg);
-		double[][] rotYArr = { { cosVal, 0, sinVal }, { 0, 1, 0 }, { -sinVal, 0, cosVal } };
-		Matrix rotY = new Matrix(rotYArr);
-
+		double[][] rotXArr = { { 1, 0, 0 }, { 0, cosVal, -sinVal }, { 0, sinVal, cosVal } };
+		Matrix rotX = new Matrix(rotXArr);
+		
 		cosVal = Math.cos(orientZAvg);
 		sinVal = Math.sin(orientZAvg);
-
-		cosVal = Math.cos(orientYAvg);
-		sinVal = Math.sin(orientYAvg);
-		double[][] rotZArr = { { 1, 0, 0 }, { 0, cosVal, -sinVal }, { 0, sinVal, cosVal } };
-		Matrix rotZ = new Matrix(rotZArr);
+		double[][] rotYArr = { { cosVal, 0, sinVal }, { 0, 1, 0 }, { -sinVal, 0, cosVal } };
+		Matrix rotY = new Matrix(rotYArr);
 
 		Matrix rotFinal = rotX.times(rotY).times(rotZ).transpose();
 
@@ -124,21 +106,26 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 
 		// x = a*t^2/2 (t is in seconds)
 
-		for (Double d : accx)
-			pos[0] += d;
-		if (accx.size() > 0)
-			pos[0] /= accx.size();
-
-		for (Double d : accy)
-			pos[1] += d;
-		if (accy.size() > 0)
-			pos[1] /= accy.size();
-
-		for (Double d : accz)
-			pos[2] += d;
-		if (accz.size() > 0)
-			pos[2] /= accz.size();
-
+		try {
+			mutex.acquire();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		
+		for (SensorEntry s : entries){
+			pos[0] += s.getAcc_x();
+			pos[1] += s.getAcc_y();
+			pos[2] += s.getAcc_z();
+		}
+		
+		if (entries.size() > 0){
+			pos[0] /= entries.size();
+			pos[1] /= entries.size();
+			pos[2] /= entries.size();
+		}
+		
+		mutex.release();
+		
 		Matrix xyzMatrix = new Matrix(new double[][] { pos });
 
 		xyzMatrix = xyzMatrix.times(rotFinal);
@@ -151,43 +138,32 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		pos[1] *= Math.pow((curr - start), 2) / 2000000;
 		pos[2] *= Math.pow((curr - start), 2) / 2000000;
 
-		// average all the gyroscope readings
-		int numInstances = orientx.size();
-		double heading = 0;
-		for (Double d : orientx)
-			heading += d;
-
-		if (numInstances != 0)
-			heading /= numInstances;
-
 //		Log.i("ME", heading + " " + numInstances + "\n");
 
-		// clear all the arraylists
-		accx.clear();
-		accy.clear();
-		accz.clear();
-		orientx.clear();
-		orienty.clear();
-		orientz.clear();
-
+		try {
+			mutex.acquire();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		// clear all the arraylist
+		entries.clear();
+		
 		// if there are overflows
-		for (int i = 0; i < overflow.size(); i += 6) {
-			accx.add(overflow.get(i));
-			accy.add(overflow.get(i + 1));
-			accz.add(overflow.get(i + 2));
-			orientx.add(overflow.get(i + 3));
-			orienty.add(overflow.get(i + 4));
-			orientz.add(overflow.get(i + 5));
+		for (int i = 0; i < overflow.size(); ++i) {
+			entries.add(overflow.get(i));
 		}
 
 		overflow.clear();
+		
+		mutex.release();
 
 		// and reset the timers
 		start = -1;
 		curr = -1;
 
 //		Log.i("ME", "POS Vector: " + pos[0] + " " + pos[1] + " " + pos[2]);
-		mutex.release();
 
 		DevicePose devicePose = new DevicePose(pos[0], pos[1], pos[2], heading);
 		devicePose.setRotWorld(rotFinal);
