@@ -5,6 +5,7 @@ import java.util.Random;
 
 import motionestimation.DevicePose;
 import Jama.Matrix;
+import android.util.Log;
 
 public class EKF {
 
@@ -73,6 +74,7 @@ public class EKF {
 	// Performs the state update depending on displacement in meters, and
 	// heading in degrees
 	public void predictFromINS(double displacement, double headingRadians) {
+
 		// Initialization of variables
 		double displacementX = displacement * Math.cos(headingRadians);
 		double displacementY = displacement * Math.sin(headingRadians);
@@ -133,6 +135,7 @@ public class EKF {
 		// Update Jr and Jz matrices
 		jrMatrix = this.createJRMatrix(displacementX, displacementY);
 		jzMatrix = this.createJZMatrix(displacementX, displacementY, headingRadians);
+
 	}
 
 	private Matrix extractPri(int index) {
@@ -328,6 +331,9 @@ public class EKF {
 		X.add(0.0); // Device X
 		X.add(0.0); // Devce Y
 		X.add(0.0); // Device Theta
+
+		Log.i("EKF", "First EVER: " + X.toString());
+
 		return X;
 	}
 

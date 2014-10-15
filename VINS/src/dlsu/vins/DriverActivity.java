@@ -43,6 +43,7 @@ public class DriverActivity extends Activity implements SensorEventListener {
 
 		featureManager = new FeatureManager(this);
 		ekf = new EKF();
+		Log.i("EKF", ekf.getCurrDevicePose().toString());
 		motionEstimator = new IntegrateMotionEstimation();
 		nextSensorEntryToAdd = new SensorEntry();
 

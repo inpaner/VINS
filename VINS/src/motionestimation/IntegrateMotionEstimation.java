@@ -126,15 +126,18 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 
 		for (Double d : accx)
 			pos[0] += d;
-		pos[0] /= accx.size();
+		if (accx.size() > 0)
+			pos[0] /= accx.size();
 
 		for (Double d : accy)
 			pos[1] += d;
-		pos[1] /= accy.size();
+		if (accy.size() > 0)
+			pos[1] /= accy.size();
 
 		for (Double d : accz)
 			pos[2] += d;
-		pos[2] /= accz.size();
+		if (accz.size() > 0)
+			pos[2] /= accz.size();
 
 		Matrix xyzMatrix = new Matrix(new double[][] { pos });
 
@@ -183,7 +186,9 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		start = -1;
 		curr = -1;
 
+		Log.i("ME", "POS Vector: " + pos[0] + " " + pos[1] + " " + pos[2]);
 		mutex.release();
+
 		return new DevicePose(pos[0], pos[1], pos[2], heading);
 	}
 
