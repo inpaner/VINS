@@ -18,7 +18,6 @@ import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
-import org.opencv.core.Point3;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.features2d.FeatureDetector;
@@ -28,13 +27,8 @@ import org.opencv.video.Video;
 import dlsu.vins.R;
 import ekf.PointDouble;
 import android.app.Activity;
-import android.content.Intent;
-import android.os.Bundle;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.SurfaceView;
-import android.view.WindowManager;
 
 public class FeatureManager implements CvCameraViewListener2 {
 	private static final String TAG = "Feature Manager";
@@ -45,7 +39,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 
 	private FeatureDetector detector;
 
-	private int frames = 0; // TODO: ivan sir what is this for
+	private int frames = 0; // TODO: ivan sir what is this for, i dunno
 	private CameraBridgeViewBase cameraView;
 
 	// Optical flow fields
@@ -62,11 +56,14 @@ public class FeatureManager implements CvCameraViewListener2 {
 	private Mat F, E, W;
 	private Mat u, w, vt;
 	private Mat nullMatF, tempMat;
+	
+	private FeatureManagerListener listener;
 
-	public FeatureManager(Activity caller) {
+	public FeatureManager(Activity caller, FeatureManagerListener listener) {
 		Log.i(TAG, "constructed");
 
 		Log.i(TAG, "Trying to load OpenCV library");
+		this.listener = listener;
 		initLoader(caller);
 
 		cameraView = (CameraBridgeViewBase) caller.findViewById(R.id.surface_view);
@@ -94,6 +91,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 					prevNew = new MatOfPoint2f();
 					prevImage = new Mat();
 					detector = FeatureDetector.create(FeatureDetector.FAST);
+					listener.initDone();
 				}
 					break;
 				default: {
@@ -294,6 +292,9 @@ public class FeatureManager implements CvCameraViewListener2 {
 				// TODO: maybe this method is more optimized??
 				// Mat points3D = new Mat();
 				// Calib3d.convertPointsFromHomogeneous(points4D, points3D);
+				
+				// becomes 2n: n (with method above) + n (iterating to split into current and new
+				// I mean, sure, 2n 
 
 				// Split points to current and new PointDouble
 				// TODO verify this shit
@@ -342,4 +343,5 @@ public class FeatureManager implements CvCameraViewListener2 {
 
 		return new MatOfPoint2f(pointsArray);
 	}
+	
 }

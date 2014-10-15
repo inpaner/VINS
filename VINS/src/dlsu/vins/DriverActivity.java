@@ -19,9 +19,10 @@ import android.util.Log;
 import ekf.EKF;
 import ekf.PointDouble;
 import features.FeatureManager;
+import features.FeatureManagerListener;
 import features.FeatureUpdate;
 
-public class DriverActivity extends Activity implements SensorEventListener {
+public class DriverActivity extends Activity implements SensorEventListener, FeatureManagerListener {
 
 	private static String TAG = "Driver Activity";
 	private SensorEntry nextSensorEntryToAdd;
@@ -34,6 +35,8 @@ public class DriverActivity extends Activity implements SensorEventListener {
 	private Sensor senAccelerometer, senGyroscope, senOrientation, senGravity, senMagnetField;
 
 	private float mGrav[], mMag[];
+	
+	private boolean isFeaturesReady = false;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -41,7 +44,7 @@ public class DriverActivity extends Activity implements SensorEventListener {
 		// setContentView(R.layout.activity_driver);
 		setContentView(R.layout.fastlayout);
 
-		featureManager = new FeatureManager(this);
+		featureManager = new FeatureManager(this, this);
 		ekf = new EKF();
 		Log.i("EKF", ekf.getCurrDevicePose().toString());
 		motionEstimator = new IntegrateMotionEstimation();
@@ -82,9 +85,9 @@ public class DriverActivity extends Activity implements SensorEventListener {
 	}
 
 	private void runOneCycle() {
-		try { // TODO: temporary fix for opencv not loading is exception
-				// handling
-
+		if (!isFeaturesReady) return;
+		
+		try { 
 			/* TRIGGER MOTION ESTIMATION */
 			DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
 
@@ -236,5 +239,10 @@ public class DriverActivity extends Activity implements SensorEventListener {
 		// curr[i] += ALPHA * (curr[i]-prev[i]);
 
 		return curr;
+	}
+
+	@Override
+	public void initDone() {
+		isFeaturesReady = true;
 	}
 }
