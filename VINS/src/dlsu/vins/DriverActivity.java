@@ -31,26 +31,34 @@ public class DriverActivity extends Activity implements SensorEventListener {
 
 	// TODO: maybe separate all motion estimation things to motion estimator
 	private SensorManager sensorManager;
-	private Sensor senAccelerometer, senGyroscope, senOrientation;
-	
+	private Sensor senAccelerometer, senGyroscope, senOrientation, senGravity, senMagnetField;
+
+	private float mGrav[], mMag[];
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		//setContentView(R.layout.activity_driver);
+		// setContentView(R.layout.activity_driver);
 		setContentView(R.layout.fastlayout);
-		
+
 		featureManager = new FeatureManager(this);
 		ekf = new EKF();
 		motionEstimator = new IntegrateMotionEstimation();
 		nextSensorEntryToAdd = new SensorEntry();
-		
+
 		sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-		senAccelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);//Sensor.TYPE_ACCELEROMETER);
+		senAccelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);// Sensor.TYPE_ACCELEROMETER);
 		senGyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
 		senOrientation = sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+
+		senGravity = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+		senMagnetField = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
 		sensorManager.registerListener(this, senAccelerometer, SensorManager.SENSOR_DELAY_FASTEST);
-        sensorManager.registerListener(this, senGyroscope, SensorManager.SENSOR_DELAY_FASTEST);
-        sensorManager.registerListener(this, senOrientation, SensorManager.SENSOR_DELAY_FASTEST);
+		sensorManager.registerListener(this, senGyroscope, SensorManager.SENSOR_DELAY_FASTEST);
+		sensorManager.registerListener(this, senOrientation, SensorManager.SENSOR_DELAY_FASTEST);
+		sensorManager.registerListener(this, senGravity, SensorManager.SENSOR_DELAY_FASTEST);
+		sensorManager.registerListener(this, senMagnetField, SensorManager.SENSOR_DELAY_FASTEST);
 
 		startInertialSensorLogging();
 		startDriver();
@@ -73,27 +81,28 @@ public class DriverActivity extends Activity implements SensorEventListener {
 	}
 
 	private void runOneCycle() {
-		try { // TODO: temporary fix for opencv not loading is exception handling
-			
+		try { // TODO: temporary fix for opencv not loading is exception
+				// handling
+
 			/* TRIGGER MOTION ESTIMATION */
 			DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
-		
-			Log.i(TAG, devicePose.get_xPos() + " " + devicePose.get_yPos() + " " + devicePose.get_zPos() + " " + devicePose.getHeading());
+
+			StringBuilder logString = new StringBuilder();
+			logString.append("Device Pose(ME): " + devicePose.toString() + "\n");
 
 			/* PASS DISTANCE & HEADING TO EKF.insUpdate() */
 			ekf.predictFromINS(devicePose.getXYDistance(), devicePose.getHeading());
 
-			// Log.i(TAG, devicePose.get_xPos() + " " + devicePose.get_yPos() + " " + devicePose.get_zPos() + " " + devicePose.getHeading());
-			
+			logString.append("Device Pose(After EKF Predict): " + ekf.getCurrDevicePose().toString() + "\n");
+
 			/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES */
 			FeatureUpdate update = featureManager.getFeatureUpdate();
 
-			Log.i(TAG,	"Features to Delete: " + update.getBadPointsIndex().size() +
-							"\nFeatures to Update: " +	update.getCurrentPoints().size() + 
-							"\nFeatures to Add: " + update.getNewPoints().size());
-			
+			logString.append("Features to Delete: " + update.getBadPointsIndex().size() + "\nFeatures to Update: "
+					+ update.getCurrentPoints().size() + "\nFeatures to Add: " + update.getNewPoints().size() + "\n");
+
 			/* LOOP THROUGH THE RETURNED FEATURES */
-			
+
 			/* IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex) */
 			Collections.reverse(update.getBadPointsIndex());
 			for (Integer index : update.getBadPointsIndex())
@@ -112,12 +121,13 @@ public class DriverActivity extends Activity implements SensorEventListener {
 			for (PointDouble featpos : update.getNewPoints())
 				ekf.addFeature(featpos.getX(), featpos.getY());
 
-			//devicePose = ekf.getCurrDevicePose();
-			//Log.i("Driver", devicePose.get_xPos() + "\n" + devicePose.get_yPos() + "\n" + devicePose.get_zPos() + "\n" + devicePose.getHeading());
-		
-		} catch (Exception e) { 
+			devicePose = ekf.getCurrDevicePose();
+			logString.append("Device Pose(EKF): " + devicePose.toString() + "\n");
+			Log.i(TAG, logString.toString());
+
+		} catch (Exception e) {
 			// if anything goes wrong we cry
-			
+
 			Log.e(TAG, e.toString(), e);
 		}
 	}
@@ -133,6 +143,8 @@ public class DriverActivity extends Activity implements SensorEventListener {
 	}
 
 	private void recordSensorEntry() {
+		while (nextSensorEntryToAdd.status != SensorEntry.FULL)
+			;
 		motionEstimator.inputData(nextSensorEntryToAdd);
 		nextSensorEntryToAdd = new SensorEntry();
 	}
@@ -140,6 +152,7 @@ public class DriverActivity extends Activity implements SensorEventListener {
 	@Override
 	public void onSensorChanged(SensorEvent sensorEvent) {
 
+		nextSensorEntryToAdd.status = SensorEntry.WRITING;
 		Sensor mySensor = sensorEvent.sensor;
 
 		if (mySensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
@@ -172,12 +185,55 @@ public class DriverActivity extends Activity implements SensorEventListener {
 			float x = sensorEvent.values[0];
 			float y = sensorEvent.values[1];
 			float z = sensorEvent.values[2];
-
-			nextSensorEntryToAdd.setOrient_x(x);
-			nextSensorEntryToAdd.setOrient_y(y);
-			nextSensorEntryToAdd.setOrient_z(z);
+			//
+			// nextSensorEntryToAdd.setOrient_x(x);
+			// nextSensorEntryToAdd.setOrient_y(y);
+			// nextSensorEntryToAdd.setOrient_z(z);
+		} else if (mySensor.getType() == Sensor.TYPE_GRAVITY) {
+			mGrav = lowpass(sensorEvent.values.clone(), mGrav);
+		} else if (mySensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+			mMag = lowpass(sensorEvent.values.clone(), mMag);
 		}
 
+		if (mGrav != null && mMag != null) {
+
+			float[] rotMat = new float[9];
+			if (SensorManager.getRotationMatrix(rotMat, null, mGrav, mMag)) {
+				float[] remap = new float[9];
+
+				SensorManager.remapCoordinateSystem(rotMat, SensorManager.AXIS_X, SensorManager.AXIS_Z, remap);
+
+				float[] orient = new float[3];
+
+				SensorManager.getOrientation(rotMat, orient);
+
+				float heading = 0;
+				if (heading < 0) {
+					heading += 360;
+				}
+
+				for (int i = 0; i < orient.length; ++i) {
+					orient[i] = (float) Math.toDegrees(orient[i]);
+					if (orient[i] < 0)
+						orient[i] += 360;
+				}
+
+				nextSensorEntryToAdd.setOrient_x(orient[0]); // rotation by z
+				nextSensorEntryToAdd.setOrient_y(orient[1]);
+				nextSensorEntryToAdd.setOrient_z(orient[2]);
+
+				// Log.i(TAG, orient[0] + "," + orient[1] + "," + orient[2]);
+			}
+		}
+
+		nextSensorEntryToAdd.status = SensorEntry.FULL;
 	}
 
+	private float[] lowpass(float[] curr, float[] prev) {
+		// if(prev != null)
+		// for(int i=0; i < curr.length; ++i)
+		// curr[i] += ALPHA * (curr[i]-prev[i]);
+
+		return curr;
+	}
 }

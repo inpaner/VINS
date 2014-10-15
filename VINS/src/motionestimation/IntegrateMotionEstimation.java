@@ -5,6 +5,7 @@ import java.util.Calendar;
 import java.util.concurrent.Semaphore;
 
 import Jama.Matrix;
+import android.util.Log;
 
 public class IntegrateMotionEstimation implements MotionEstimation {
 	// timer counters
@@ -76,6 +77,8 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		if (orientx.size() != 0)
 			orientXAvg /= orientx.size();
 
+		orientXAvg = Math.toRadians(orientXAvg);
+
 		orientYAvg = 0;
 		for (Double d : orienty)
 			orientYAvg += d;
@@ -83,12 +86,16 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		if (orienty.size() != 0)
 			orientYAvg /= orienty.size();
 
+		orientYAvg = Math.toRadians(orientYAvg);
+
 		orientZAvg = 0;
 		for (Double d : orientz)
 			orientZAvg += d;
 
 		if (orientz.size() != 0)
 			orientZAvg /= orientz.size();
+
+		orientZAvg = Math.toRadians(orientZAvg);
 
 		double cosVal, sinVal;
 
@@ -149,6 +156,8 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 
 		if (numInstances != 0)
 			heading /= numInstances;
+
+		Log.i("ME", heading + " " + numInstances + "\n");
 
 		// clear all the arraylists
 		accx.clear();

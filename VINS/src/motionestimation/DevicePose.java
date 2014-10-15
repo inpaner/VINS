@@ -4,9 +4,9 @@ public class DevicePose {
 	private double xPos;
 	private double yPos;
 	private double zPos;
-	
+
 	private double heading;
-	
+
 	public DevicePose(double x, double y, double z, double h) {
 		xPos = x;
 		yPos = y;
@@ -14,14 +14,14 @@ public class DevicePose {
 		heading = h;
 	}
 
-	public String toString(){
-		return "("+xPos+","+yPos+")";
+	public String toString() {
+		return "(" + xPos + "," + yPos + "," + zPos + ", " + heading + ")";
 	}
-	
-	public double getXYDistance(){
-	    return Math.sqrt(Math.pow(xPos, 2)+Math.pow(yPos, 2));
+
+	public double getXYDistance() {
+		return Math.sqrt(Math.pow(xPos, 2) + Math.pow(yPos, 2));
 	}
-	
+
 	public double get_xPos() {
 		return xPos;
 	}
@@ -46,8 +46,9 @@ public class DevicePose {
 		this.zPos = zPos;
 	}
 
+	// returns in radians
 	public double getHeading() {
-		return heading;
+		return Math.toRadians(heading);
 	}
 
 	public void setHeading(double heading) {
