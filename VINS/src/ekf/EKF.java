@@ -41,7 +41,8 @@ public class EKF {
 
 	public DevicePose getCurrDevicePose() {
 		PointDouble deviceCoords = getDeviceCoords();
-		DevicePose pose = new DevicePose(deviceCoords.getX(), deviceCoords.getY(), 0, getHeading());
+		DevicePose pose = new DevicePose(deviceCoords.getX(), deviceCoords.getY(), 0,
+				Math.toDegrees(getHeadingDegrees()));
 		return pose;
 	}
 
@@ -65,7 +66,11 @@ public class EKF {
 		return point;
 	}
 
-	private double getHeading() {
+	private double getHeadingDegrees() {
+		return Math.toDegrees(this.getHeadingRadians());
+	}
+
+	private double getHeadingRadians() {
 		return X.get(2);
 	}
 
@@ -168,7 +173,7 @@ public class EKF {
 		double observedDistance = deviceCoords.computeDistanceTo(observedFeatureCoords);
 		double observedHeading = Math.atan((observedFeatureCoords.getY() - deviceCoords.getY())
 				/ (observedFeatureCoords.getX() - deviceCoords.getX()))
-				- this.getHeading();
+				- this.getHeadingRadians();
 
 		/* Calculate the Kalman Gain */
 
@@ -186,7 +191,7 @@ public class EKF {
 		double predictedDistanceX = featureCoords.getX() - deviceCoords.getX();
 		double predictedDistanceY = featureCoords.getY() - deviceCoords.getY();
 		double predictedDistance = Math.sqrt(Math.pow(predictedDistanceX, 2) + Math.pow(predictedDistanceY, 2));
-		double predictedHeading = (Math.atan(predictedDistanceY / predictedDistanceX)) - this.getHeading();
+		double predictedHeading = (Math.atan(predictedDistanceY / predictedDistanceX)) - this.getHeadingRadians();
 
 		// Still need to add measurement noise to these two variables
 		double[][] differenceVector = new double[2][1];
