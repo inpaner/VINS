@@ -174,7 +174,8 @@ public class EKF {
 		double observedHeading = Math.atan((observedFeatureCoords.getY() - deviceCoords.getY())
 				/ (observedFeatureCoords.getX() - deviceCoords.getX()))
 				- this.getHeadingRadians();
-
+		// TODO Something wrong here (heading)
+		
 		/* Calculate the Kalman Gain */
 
 		// Calculate innovation matrix

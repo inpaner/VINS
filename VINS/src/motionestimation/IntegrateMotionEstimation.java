@@ -160,7 +160,7 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		if (numInstances != 0)
 			heading /= numInstances;
 
-		Log.i("ME", heading + " " + numInstances + "\n");
+//		Log.i("ME", heading + " " + numInstances + "\n");
 
 		// clear all the arraylists
 		accx.clear();
@@ -186,10 +186,13 @@ public class IntegrateMotionEstimation implements MotionEstimation {
 		start = -1;
 		curr = -1;
 
-		Log.i("ME", "POS Vector: " + pos[0] + " " + pos[1] + " " + pos[2]);
+//		Log.i("ME", "POS Vector: " + pos[0] + " " + pos[1] + " " + pos[2]);
 		mutex.release();
 
-		return new DevicePose(pos[0], pos[1], pos[2], heading);
+		DevicePose devicePose = new DevicePose(pos[0], pos[1], pos[2], heading);
+		devicePose.setRotWorld(rotFinal);
+		
+		return devicePose;
 	}
 
 	public void startTimer() {

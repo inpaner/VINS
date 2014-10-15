@@ -1,9 +1,12 @@
 package motionestimation;
 
+import Jama.Matrix;
+
 public class DevicePose {
 	private double xPos;
 	private double yPos;
 	private double zPos;
+	private Matrix rotWorld;
 
 	private double heading;
 
@@ -20,6 +23,14 @@ public class DevicePose {
 
 	public double getXYDistance() {
 		return Math.sqrt(Math.pow(xPos, 2) + Math.pow(yPos, 2));
+	}
+	
+	public Matrix getRotWorld(){
+		return rotWorld;
+	}
+	
+	public void setRotWorld(Matrix rotWorld){
+		this.rotWorld = rotWorld;
 	}
 
 	public double get_xPos() {

@@ -3,6 +3,8 @@ package features;
 import java.util.ArrayList;
 import java.util.List;
 
+import motionestimation.DevicePose;
+
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.LoaderCallbackInterface;
@@ -55,7 +57,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 	private Mat points4D;
 	private Mat F, E, W;
 	private Mat u, w, vt;
-	private Mat nullMatF, tempMat;
+	private Mat nullMatF, tempMat, RotW, RotFinal;
 	
 	private FeatureManagerListener listener;
 
@@ -169,7 +171,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 		return currentImage;
 	}
 
-	public FeatureUpdate getFeatureUpdate() {
+	public FeatureUpdate getFeatureUpdate(DevicePose devicePose) {
 		Log.d(TAG, "Getting Feature Update");
 
 		Mat detectMask = currentImage.clone();
@@ -284,10 +286,25 @@ public class FeatureManager implements CvCameraViewListener2 {
 				// Log.i("t", T.dump());
 				// Log.i("nullMatF", nullMatF.dump());
 
+				RotW = Mat.zeros(3, 3, CvType.CV_64F);
+				RotW.put(0, 0, devicePose.getRotWorld().getArray()[0]);
+				RotW.put(1, 0, devicePose.getRotWorld().getArray()[1]);
+				RotW.put(2, 0, devicePose.getRotWorld().getArray()[2]);
+				RotFinal = Mat.zeros(3, 3, CvType.CV_64F);
+				Core.gemm(RotW, Rot, 1, Mat.zeros(0, 0, CvType.CV_64F), 0, RotFinal);
+
 				points4D = Mat.zeros(1, 4, CvType.CV_64F);
-				Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, Rot, T, R1, R2, P1,
+				Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, RotFinal, T, R1, R2, P1,
 						P2, Q);
 				Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
+				
+				double transPixel[] = T.t().get(0, 0);
+				double transMetric[] = {devicePose.get_xPos(), devicePose.get_yPos(), devicePose.get_zPos()};
+				double metricScale = 0;
+				
+				for(int i = 0; i < transPixel.length; ++i)
+					metricScale += transMetric[i]/transPixel[i];
+				metricScale /= 3;
 
 				// TODO: maybe this method is more optimized??
 				// Mat points3D = new Mat();
@@ -300,13 +317,15 @@ public class FeatureManager implements CvCameraViewListener2 {
 				// TODO verify this shit
 				// TODO yass corrected
 
-				Log.i(TAG, "points4D size: " + points4D.size().width);
+//				Log.i(TAG, "points4D size: " + points4D.size().width);
+//				Log.i(TAG, T.dump());
+//				Log.i(TAG, devicePose.toString());
 
 				List<PointDouble> current2d = new ArrayList<>();
 				List<PointDouble> new2d = new ArrayList<>();
 				for (int i = 0; i < goodOld.height(); i++) {
-					double x = points4D.get(0, i)[0] / points4D.get(3, i)[0];
-					double y = points4D.get(1, i)[0] / points4D.get(3, i)[0];
+					double x = points4D.get(0, i)[0] * metricScale / points4D.get(3, i)[0];
+					double y = points4D.get(1, i)[0] * metricScale / points4D.get(3, i)[0];
 
 					PointDouble point = new PointDouble(x, y);
 					if (i < currentSize) {
