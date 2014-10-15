@@ -1,15 +1,7 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package motionestimation;
 
 import java.util.LinkedList;
 
-/**
- *
- * @author CCS
- */
 public class SensorEntry {
 
     private int entryNumber;
@@ -208,6 +200,4 @@ public class SensorEntry {
     public String toRawString(){
     	return getAcc_x()+","+getAcc_y()+","+getAcc_z()+","+getGyro_x()+","+getGyro_y()+","+getGyro_z()+","+getOrient_x()+","+getOrient_y()+","+getOrient_z();
     }
-    
-
 }

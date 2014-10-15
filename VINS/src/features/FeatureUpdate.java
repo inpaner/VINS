@@ -6,19 +6,37 @@ import java.util.List;
 import ekf.PointDouble;
 
 public class FeatureUpdate {
-	List<Integer> badPointsIndex = new ArrayList<>();
-	List<PointDouble> currentPoints = new ArrayList<>();
-	List<PointDouble> newPoints = new ArrayList<>();
+	private List<Integer> badPointsIndex;
+	private List<PointDouble> currentPoints;
+	private List<PointDouble> newPoints;
 	
-	public List<PointDouble> getNewPoints() {
-		return newPoints;
+	public FeatureUpdate(){
+		badPointsIndex = new ArrayList<>();
+		currentPoints = new ArrayList<>();
+		newPoints = new ArrayList<>();
+	}
+	
+	public List<Integer> getBadPointsIndex() {
+		return badPointsIndex;
 	}
 	
 	public List<PointDouble> getCurrentPoints() {
 		return currentPoints;
 	}
 	
-	public List<Integer> getBadPointsIndex() {
-		return badPointsIndex;
+	public List<PointDouble> getNewPoints() {
+		return newPoints;
+	}
+	
+	public void setBadPointsIndex(List<Integer> badPointsIndex){
+		this.badPointsIndex = badPointsIndex;
+	}
+	
+	public void setCurrentPoints(List<PointDouble> currentPoints){
+		this.currentPoints = currentPoints;
+	}
+	
+	public void setNewPoints(List<PointDouble> newPoints){
+		this.newPoints = newPoints;
 	}
 }

@@ -1,5 +1,6 @@
 package dlsu.vins;
 
+import java.util.Collections;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -8,9 +9,11 @@ import motionestimation.IntegrateMotionEstimation;
 import motionestimation.MotionEstimation;
 import motionestimation.SensorEntry;
 import android.app.Activity;
+import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.util.Log;
 import ekf.EKF;
@@ -20,11 +23,16 @@ import features.FeatureUpdate;
 
 public class DriverActivity extends Activity implements SensorEventListener {
 
+	private static String TAG = "Driver Activity";
 	private SensorEntry nextSensorEntryToAdd;
 	private EKF ekf;
 	private FeatureManager featureManager;
 	MotionEstimation motionEstimator;
 
+	// TODO: maybe separate all motion estimation things to motion estimator
+	private SensorManager sensorManager;
+	private Sensor senAccelerometer, senGyroscope, senOrientation;
+	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -35,6 +43,15 @@ public class DriverActivity extends Activity implements SensorEventListener {
 		ekf = new EKF();
 		motionEstimator = new IntegrateMotionEstimation();
 		nextSensorEntryToAdd = new SensorEntry();
+		
+		sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+		senAccelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);//Sensor.TYPE_ACCELEROMETER);
+		senGyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+		senOrientation = sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+		sensorManager.registerListener(this, senAccelerometer, SensorManager.SENSOR_DELAY_FASTEST);
+        sensorManager.registerListener(this, senGyroscope, SensorManager.SENSOR_DELAY_FASTEST);
+        sensorManager.registerListener(this, senOrientation, SensorManager.SENSOR_DELAY_FASTEST);
+
 		startInertialSensorLogging();
 		startDriver();
 	}
@@ -52,47 +69,57 @@ public class DriverActivity extends Activity implements SensorEventListener {
 			public void run() {
 				runOneCycle();
 			}
-		}, 0, 333);
+		}, 0, 3000);
 	}
 
 	private void runOneCycle() {
-		/* TRIGGER MOTION ESTIMATION */
-		
-		try { // TODO: temporary fix for the opencv thing is just exception handling
+		try { // TODO: temporary fix for opencv not loading is exception handling
 			
+			/* TRIGGER MOTION ESTIMATION */
 			DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
+		
+			Log.i(TAG, devicePose.get_xPos() + " " + devicePose.get_yPos() + " " + devicePose.get_zPos() + " " + devicePose.getHeading());
 
 			/* PASS DISTANCE & HEADING TO EKF.insUpdate() */
 			ekf.predictFromINS(devicePose.getXYDistance(), devicePose.getHeading());
 
+			// Log.i(TAG, devicePose.get_xPos() + " " + devicePose.get_yPos() + " " + devicePose.get_zPos() + " " + devicePose.getHeading());
+			
 			/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES */
 			FeatureUpdate update = featureManager.getFeatureUpdate();
 
+			Log.i(TAG,	"Features to Delete: " + update.getBadPointsIndex().size() +
+							"\nFeatures to Update: " +	update.getCurrentPoints().size() + 
+							"\nFeatures to Add: " + update.getNewPoints().size());
+			
+			/* LOOP THROUGH THE RETURNED FEATURES */
+			
+			/* IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex) */
+			Collections.reverse(update.getBadPointsIndex());
 			for (Integer index : update.getBadPointsIndex())
 				ekf.deleteFeature(index);
 
+			/*
+			 * IF RE-OBSERVED FEATURE, CALL
+			 * EKF.updateReobservedFeature(featureIndex, observedDistance,
+			 * observedHeading)
+			 */
 			int i = 0;
 			for (PointDouble featpos : update.getCurrentPoints())
 				ekf.updateFromReobservedFeature(i++, featpos.getX(), featpos.getY());
 
+			/* IF NEW FEATURE, CALL EKF.addFeature(x, y) */
 			for (PointDouble featpos : update.getNewPoints())
 				ekf.addFeature(featpos.getX(), featpos.getY());
 
-			devicePose = ekf.getCurrDevicePose();
-			Log.i("Driver", devicePose.get_xPos() + "\n" + devicePose.get_yPos() + "\n" + devicePose.get_zPos() + "\n" + devicePose.getHeading());
+			//devicePose = ekf.getCurrDevicePose();
+			//Log.i("Driver", devicePose.get_xPos() + "\n" + devicePose.get_yPos() + "\n" + devicePose.get_zPos() + "\n" + devicePose.getHeading());
+		
 		} catch (Exception e) { 
 			// if anything goes wrong we cry
 			
-			Log.i("Driver", e.toString());
+			Log.e(TAG, e.toString(), e);
 		}
-		/* LOOP THROUGH THE RETURNED FEATURES */
-		/* IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex) */
-		/*
-		 * IF RE-OBSERVED FEATURE, CALL
-		 * EKF.updateReobservedFeature(featureIndex, observedDistance,
-		 * observedHeading)
-		 */
-		/* IF NEW FEATURE, CALL EKF.addFeature(x, y) */
 	}
 
 	private void startInertialSensorLogging() {
@@ -115,7 +142,7 @@ public class DriverActivity extends Activity implements SensorEventListener {
 
 		Sensor mySensor = sensorEvent.sensor;
 
-		if (mySensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+		if (mySensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
 
 			// add to the sensor entry batch if time to add
 
