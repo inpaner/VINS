@@ -28,15 +28,15 @@ public class FeatureUpdate {
 		return newPoints;
 	}
 	
-	public void setBadPointsIndex(List<Integer> badPointsIndex){
+	void setBadPointsIndex(List<Integer> badPointsIndex){
 		this.badPointsIndex = badPointsIndex;
 	}
 	
-	public void setCurrentPoints(List<PointDouble> currentPoints){
+	void setCurrentPoints(List<PointDouble> currentPoints){
 		this.currentPoints = currentPoints;
 	}
 	
-	public void setNewPoints(List<PointDouble> newPoints){
+	void setNewPoints(List<PointDouble> newPoints){
 		this.newPoints = newPoints;
 	}
 }
