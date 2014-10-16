@@ -9,6 +9,7 @@
         android:id="@+id/surface_view"
         android:layout_width="fill_parent"
         android:layout_height="202dp"
+        android:visibility="invisible"
         opencv:camera_id="any"
         opencv:show_fps="true" />
 
@@ -16,7 +17,7 @@
         android:id="@+id/debugTextView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:text="hh"
+        android:text="hello world"
         android:textAppearance="?android:attr/textAppearanceSmall" />
 
 </LinearLayout>

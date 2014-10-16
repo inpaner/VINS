@@ -1,12 +1,15 @@
 package motionestimation;
 
+import java.text.DecimalFormat;
+
 import Jama.Matrix;
 
 public class DevicePose {
 	private double xPos;
 	private double yPos;
 	private double zPos;
-	private Matrix rotWorld; // Transposed Rotation Matrix based on device orientation
+	private Matrix rotWorld; // Transposed Rotation Matrix based on device
+								// orientation
 
 	private double heading;
 
@@ -18,7 +21,8 @@ public class DevicePose {
 	}
 
 	public String toString() {
-		return "(" + xPos + "," + yPos + "," + zPos + ", " + heading + ")";
+		DecimalFormat df = new DecimalFormat("0.00");
+		return "(" + df.format(xPos) + "," + df.format(yPos) + " " + df.format(heading) + ")";
 	}
 
 	public double getXYDistance() {
@@ -57,12 +61,12 @@ public class DevicePose {
 	public void setHeading(double heading) {
 		this.heading = heading;
 	}
-	
-	public Matrix getRotWorld(){
+
+	public Matrix getRotWorld() {
 		return rotWorld;
 	}
-	
-	public void setRotWorld(Matrix rotWorld){
+
+	public void setRotWorld(Matrix rotWorld) {
 		this.rotWorld = rotWorld;
 	}
 }

@@ -7,10 +7,10 @@ import motionestimation.DevicePose;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
 import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
@@ -26,11 +26,11 @@ import org.opencv.features2d.FeatureDetector;
 import org.opencv.features2d.KeyPoint;
 import org.opencv.video.Video;
 
-import dlsu.vins.R;
-import ekf.PointDouble;
 import android.app.Activity;
 import android.util.Log;
 import android.view.SurfaceView;
+import dlsu.vins.R;
+import ekf.PointDouble;
 
 public class FeatureManager implements CvCameraViewListener2 {
 	private static final String TAG = "Feature Manager";
@@ -58,7 +58,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 	private Mat F, E, W;
 	private Mat u, w, vt;
 	private Mat nullMatF, tempMat, RotW, RotFinal;
-	
+
 	private FeatureManagerListener listener;
 
 	public FeatureManager(Activity caller, FeatureManagerListener listener) {
@@ -178,8 +178,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 		detectMask.setTo(WHITE);
 
 		FeatureUpdate update = new FeatureUpdate();
-		Log.i(TAG, 	"prevCurrent: " + prevCurrent.size() + 
-					"\nprevNew: " + prevNew.size());
+		Log.i(TAG, "prevCurrent: " + prevCurrent.size() + "\nprevNew: " + prevNew.size());
 
 		if (prevCurrent.size().height + prevNew.size().height > 0) {
 
@@ -294,46 +293,50 @@ public class FeatureManager implements CvCameraViewListener2 {
 				Core.gemm(RotW, Rot, 1, Mat.zeros(0, 0, CvType.CV_64F), 0, RotFinal);
 
 				points4D = Mat.zeros(1, 4, CvType.CV_64F);
-				Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, RotFinal, T, R1, R2, P1,
-						P2, Q);
+				Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize,
+						RotFinal, T, R1, R2, P1, P2, Q);
 				Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
-				
+
 				double transPixel[] = T.t().get(0, 0);
-				double transMetric[] = {devicePose.get_xPos(), devicePose.get_yPos(), devicePose.get_zPos()};
+				double transMetric[] = { devicePose.get_xPos(), devicePose.get_yPos(), devicePose.get_zPos() };
 				double metricScale = 0;
-				
-				for(int i = 0; i < transPixel.length; ++i)
-					metricScale += transMetric[i]/transPixel[i];
+
+				for (int i = 0; i < transPixel.length; ++i)
+					metricScale += transMetric[i] / transPixel[i];
 				metricScale /= 3;
 
 				// TODO: maybe this method is more optimized??
 				// Mat points3D = new Mat();
 				// Calib3d.convertPointsFromHomogeneous(points4D, points3D);
-				
-				// becomes 2n: n (with method above) + n (iterating to split into current and new
-				// I mean, sure, 2n 
+
+				// becomes 2n: n (with method above) + n (iterating to split
+				// into current and new
+				// I mean, sure, 2n
 
 				// Split points to current and new PointDouble
 				// TODO verify this shit
 				// TODO yass corrected
 
-//				Log.i(TAG, "points4D size: " + points4D.size().width);
-//				Log.i(TAG, T.dump());
-//				Log.i(TAG, devicePose.toString());
+				// Log.i(TAG, "points4D size: " + points4D.size().width);
+				// Log.i(TAG, T.dump());
+				// Log.i(TAG, devicePose.toString());
 
+				PointDouble point = null;
 				List<PointDouble> current2d = new ArrayList<>();
 				List<PointDouble> new2d = new ArrayList<>();
 				for (int i = 0; i < goodOld.height(); i++) {
 					double x = points4D.get(0, i)[0] * metricScale / points4D.get(3, i)[0];
-					double y = points4D.get(1, i)[0] * metricScale / points4D.get(3, i)[0];
+					double y = points4D.get(2, i)[0] * metricScale / points4D.get(3, i)[0];
 
-					PointDouble point = new PointDouble(x, y);
+					point = new PointDouble(x, y);
 					if (i < currentSize) {
 						current2d.add(point);
 					} else {
 						new2d.add(point);
 					}
 				}
+				Log.i("FM Feats", point.toString() + "");
+
 				update.setCurrentPoints(current2d);
 				update.setNewPoints(new2d);
 			}
@@ -362,5 +365,5 @@ public class FeatureManager implements CvCameraViewListener2 {
 
 		return new MatOfPoint2f(pointsArray);
 	}
-	
+
 }
