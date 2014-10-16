@@ -1,9 +1,12 @@
 package motionestimation;
 
+import Jama.Matrix;
+
 public class DevicePose {
 	private double xPos;
 	private double yPos;
 	private double zPos;
+	private Matrix rotWorld; // Transposed Rotation Matrix based on device orientation
 
 	private double heading;
 
@@ -53,5 +56,13 @@ public class DevicePose {
 
 	public void setHeading(double heading) {
 		this.heading = heading;
+	}
+	
+	public Matrix getRotWorld(){
+		return rotWorld;
+	}
+	
+	public void setRotWorld(Matrix rotWorld){
+		this.rotWorld = rotWorld;
 	}
 }

@@ -102,7 +102,7 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 			logString.append("Device Pose(After EKF Predict): " + ekf.getCurrDevicePose().toString() + "\n");
 
 			/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES */
-			FeatureUpdate update = featureManager.getFeatureUpdate();
+			FeatureUpdate update = featureManager.getFeatureUpdate(devicePose);
 
 			logString.append("Features to Delete: " + update.getBadPointsIndex().size() + "\nFeatures to Update: "
 					+ update.getCurrentPoints().size() + "\nFeatures to Add: " + update.getNewPoints().size() + "\n");
@@ -155,6 +155,8 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 		int i = 0;
 		while (nextSensorEntryToAdd.status != SensorEntry.FULL)
 			i++;
+		// TODO android occasionally force crashes this busy waiting loop
+
 		motionEstimator.inputData(nextSensorEntryToAdd);
 		nextSensorEntryToAdd = new SensorEntry();
 	}
