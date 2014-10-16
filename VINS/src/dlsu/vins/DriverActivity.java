@@ -16,6 +16,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
 import ekf.EKF;
 import ekf.PointDouble;
 import features.FeatureManager;
@@ -35,7 +36,7 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 	private Sensor senAccelerometer, senGyroscope, senOrientation, senGravity, senMagnetField;
 
 	private float mGrav[], mMag[];
-	
+
 	private boolean isFeaturesReady = false;
 
 	@Override
@@ -85,9 +86,10 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 	}
 
 	private void runOneCycle() {
-		if (!isFeaturesReady) return;
-		
-		try { 
+		if (!isFeaturesReady)
+			return;
+
+		try {
 			/* TRIGGER MOTION ESTIMATION */
 			DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
 
@@ -127,6 +129,9 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 
 			devicePose = ekf.getCurrDevicePose();
 			logString.append("Device Pose(EKF): " + devicePose.toString() + "\n");
+			TextView tv = (TextView) findViewById(R.id.debugTextView);
+			tv.setText(devicePose.toString() + "\n" + tv.getText());
+
 			Log.i(TAG, logString.toString());
 
 		} catch (Exception e) {
@@ -147,8 +152,9 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 	}
 
 	private void recordSensorEntry() {
+		int i = 0;
 		while (nextSensorEntryToAdd.status != SensorEntry.FULL)
-			;
+			i++;
 		motionEstimator.inputData(nextSensorEntryToAdd);
 		nextSensorEntryToAdd = new SensorEntry();
 	}
