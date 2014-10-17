@@ -8,6 +8,7 @@ import motionestimation.DevicePose;
 import android.test.AndroidTestCase;
 import android.util.Log;
 import ekf.EKF;
+import ekf.PointDouble;
 
 public class EKFTests extends AndroidTestCase {
 
@@ -166,48 +167,41 @@ public class EKFTests extends AndroidTestCase {
 	 */
 	public void testBadINSGoodVINS() {
 
-		int correctFinalX = 1;
-		int correctFinalY = 2;
+		int correctFinalX = 0;
+		int correctFinalY = 1;
 
-		double expectedFinalXWithoutVINS = 1.232488628;
-		double expectedFinalYWithoutVINS = 2.125010273;
+		double radians92 = Math.toRadians(92);
 
-		double actualErrorX = expectedFinalXWithoutVINS - correctFinalX;
-		double actualErrorY = expectedFinalYWithoutVINS - correctFinalY;
+		PointDouble correctCoords = new PointDouble(0, 1);
+		PointDouble expectedCoordsWithoutEKF = new PointDouble(Math.cos(radians92), Math.sin(radians92));
+		double errorWithoutEKF = correctCoords.computeDistanceTo(expectedCoordsWithoutEKF);
 
-		ekf.addFeature(0, 50);
+		ekf.addFeature(0, 10);
 		Log.d(TAG, "TestBadINSGoodVINS Start: " + ekf.getCurrDevicePose().toString());
 
-		// INS has error of -0.1 and -5deg for distance and heading respectively
-		ekf.predictFromINS(Math.sqrt(2) - 0.1, Math.toRadians(45 - 5));
+		// INS has 2 degree error for heading
+		ekf.predictFromINS(1, Math.toRadians(90 + 2));
 		Log.d(TAG, "TestBadINSGoodVINS After INS 1: " + ekf.getCurrDevicePose().toString());
 
-		ekf.updateFromReobservedFeature(0, 0, 50);
+		ekf.updateFromReobservedFeature(0, 10 * Math.cos(Math.toRadians(92)), 10 * Math.sin(Math.toRadians(92)));
 		Log.d(TAG, "TestBadINSGoodVINS After Reobserve 1: " + ekf.getCurrDevicePose().toString());
 
-		// INS has error of 0.3 and -10deg for distance and heading respectively
-		ekf.predictFromINS(1 + 0.3, Math.toRadians(90 - 10));
-		Log.d(TAG, "TestBadINSGoodVINS After INS 2: " + ekf.getCurrDevicePose().toString());
-
-		ekf.updateFromReobservedFeature(0, 0, 50);
-		Log.d(TAG, "TestBadINSGoodVINS After Reobserve 2: " + ekf.getCurrDevicePose().toString());
-
 		double errorXWithVINS = ekf.getCurrDevicePose().get_xPos() - correctFinalX;
-		double errorYWithVINS = (ekf.getCurrDevicePose().get_yPos() - correctFinalY);
+		double errorYWithVINS = ekf.getCurrDevicePose().get_yPos() - correctFinalY;
 
-		double improvementX = Math.abs(actualErrorX) - Math.abs(errorXWithVINS);
-		double improvementY = Math.abs(actualErrorY) - Math.abs(errorYWithVINS);
+		double errorWithEKF = correctCoords.computeDistanceTo(ekf.getDeviceCoords());
+
+		double improvement = errorWithoutEKF - errorWithEKF;
 
 		// Log expected error w/o VINS, w/ VINS, and the improvement with VINS
 		// over pure INS
-		Log.d(TAG, "TestBadINSGoodVINS Actual Error X = " + actualErrorX + " y = " + actualErrorY);
-		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Error: x = " + errorXWithVINS + " y = " + errorYWithVINS);
-		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Improvement: x = " + improvementX + " y = " + improvementY);
+		Log.d(TAG, "TestBadINSGoodVINS Actual Error X = " + errorWithoutEKF);
+		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Error: x = " + errorWithEKF);
+		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Improvement: x = " + improvement);
 
 		// Improvements should be positive to mean that VINS affected the
 		// estimates positively
-		assertTrue(improvementX > 0);
-		assertTrue(improvementY > 0);
+		assertTrue(improvement > 0);
 	}
 
 	private double round2Decimals(double value) {
