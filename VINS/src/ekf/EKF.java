@@ -49,7 +49,7 @@ public class EKF {
 		return (ArrayList<Double>) X.clone();
 	}
 
-	private PointDouble getDeviceCoords() {
+	public PointDouble getDeviceCoords() {
 		PointDouble point = new PointDouble(X.get(0), X.get(1));
 		return point;
 	}
