@@ -179,14 +179,14 @@ public class EKFTests extends AndroidTestCase {
 		Log.d(TAG, "TestBadINSGoodVINS Start: " + ekf.getCurrDevicePose().toString());
 
 		// INS has error of -0.1 and -5deg for distance and heading respectively
-		ekf.predictFromINS(Math.sqrt(2) - 0.1, Math.toDegrees(45 - 5));
+		ekf.predictFromINS(Math.sqrt(2) - 0.1, Math.toRadians(45 - 5));
 		Log.d(TAG, "TestBadINSGoodVINS After INS 1: " + ekf.getCurrDevicePose().toString());
 
 		ekf.updateFromReobservedFeature(0, 0, 50);
 		Log.d(TAG, "TestBadINSGoodVINS After Reobserve 1: " + ekf.getCurrDevicePose().toString());
 
 		// INS has error of 0.3 and -10deg for distance and heading respectively
-		ekf.predictFromINS(1 + 0.3, Math.toDegrees(90 - 10));
+		ekf.predictFromINS(1 + 0.3, Math.toRadians(90 - 10));
 		Log.d(TAG, "TestBadINSGoodVINS After INS 2: " + ekf.getCurrDevicePose().toString());
 
 		ekf.updateFromReobservedFeature(0, 0, 50);
