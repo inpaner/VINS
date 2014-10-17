@@ -6,9 +6,10 @@ public class DevicePose {
 	private double xPos;
 	private double yPos;
 	private double zPos;
-	private Matrix rotWorld; // Transposed Rotation Matrix based on device orientation
+	private Matrix rotWorld; // Transposed Rotation Matrix based on device
+								// orientation
 
-	private double heading;
+	private double heading; // always in degrees
 
 	public DevicePose(double x, double y, double z, double h) {
 		xPos = x;
@@ -49,20 +50,19 @@ public class DevicePose {
 		this.zPos = zPos;
 	}
 
-	// returns in radians
 	public double getHeading() {
-		return Math.toRadians(heading);
+		return heading;
 	}
 
 	public void setHeading(double heading) {
 		this.heading = heading;
 	}
-	
-	public Matrix getRotWorld(){
+
+	public Matrix getRotWorld() {
 		return rotWorld;
 	}
-	
-	public void setRotWorld(Matrix rotWorld){
+
+	public void setRotWorld(Matrix rotWorld) {
 		this.rotWorld = rotWorld;
 	}
 }
