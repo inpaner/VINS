@@ -169,33 +169,26 @@ public class EKF {
 		PointDouble deviceCoords = this.getDeviceCoords();
 		PointDouble observedFeatureCoords = new PointDouble(fX, fY);
 
+		/* Calculate the observed distance and heading */
 		double observedDistance = deviceCoords.computeDistanceTo(observedFeatureCoords);
-		double observedHeading = Math.atan((observedFeatureCoords.getY() - deviceCoords.getY())
-				/ (observedFeatureCoords.getX() - deviceCoords.getX()))
-				- this.getHeadingRadians();
+		double observedHeading = deviceCoords.computeRadiansTo(observedFeatureCoords) - this.getHeadingRadians();
 
 		/* Calculate the Kalman Gain */
-
-		// Calculate innovation matrix
 		Matrix hMatrix = this.createH(observedDistance, featureIndex, observedFeatureCoords, deviceCoords);
 		Matrix pMatrix = this.extractSubMatrix(0, P.size() - 1, 0, P.size() - 1);
-
 		Matrix hphMatrix = hMatrix.times(pMatrix).times(hMatrix.transpose());
 		Matrix vrvMatrix = this.createVRVMatrix(observedDistance);
 		Matrix innovationMatrix = hphMatrix.plus(vrvMatrix);
-
 		Matrix kalmanGainMatrix = pMatrix.times(hMatrix.transpose()).times(innovationMatrix.inverse());
 
 		/* Predict the distance and heading to the specified feature */
-		double predictedDistanceX = featureCoords.getX() - deviceCoords.getX();
-		double predictedDistanceY = featureCoords.getY() - deviceCoords.getY();
-		double predictedDistance = Math.sqrt(Math.pow(predictedDistanceX, 2) + Math.pow(predictedDistanceY, 2));
-		double predictedHeading = (Math.atan(predictedDistanceY / predictedDistanceX)) - this.getHeadingRadians();
+		double predictedDistance = deviceCoords.computeDistanceTo(featureCoords);
+		double predictedHeadingDelta = deviceCoords.computeRadiansTo(featureCoords) - this.getHeadingRadians();
 
 		// Still need to add measurement noise to these two variables
 		double[][] differenceVector = new double[2][1];
 		differenceVector[0][0] = observedDistance - predictedDistance;
-		differenceVector[1][0] = observedHeading - predictedHeading;
+		differenceVector[1][0] = observedHeading - predictedHeadingDelta;
 		Matrix zMinusHMatrix = new Matrix(differenceVector);
 
 		/* Adjust state vector based on prediction */
