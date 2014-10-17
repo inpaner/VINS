@@ -41,8 +41,7 @@ public class EKF {
 
 	public DevicePose getCurrDevicePose() {
 		PointDouble deviceCoords = getDeviceCoords();
-		DevicePose pose = new DevicePose(deviceCoords.getX(), deviceCoords.getY(), 0,
-				Math.toDegrees(getHeadingDegrees()));
+		DevicePose pose = new DevicePose(deviceCoords.getX(), deviceCoords.getY(), 0, getHeadingDegrees());
 		return pose;
 	}
 
@@ -175,7 +174,7 @@ public class EKF {
 				/ (observedFeatureCoords.getX() - deviceCoords.getX()))
 				- this.getHeadingRadians();
 		// TODO Something wrong here (heading)
-		
+
 		/* Calculate the Kalman Gain */
 
 		// Calculate innovation matrix
