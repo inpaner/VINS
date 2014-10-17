@@ -28,7 +28,10 @@ public class EKFTests extends AndroidTestCase {
 		ekf = null;
 	}
 
-	// Tests that the predict step using INS updates is correct
+	/**
+	 * Tests that the predict step using INS updates is correct. Checks X (state
+	 * vector) and P (covariance matrix).
+	 */
 	public void testInsPredict() {
 
 		// INS Update 1
@@ -55,7 +58,11 @@ public class EKFTests extends AndroidTestCase {
 		assertEquals("P[2][2] should be 0.1617", 0.1617, roundDecimals(P.get(2).get(2), 4));
 	}
 
-	// Tests that adding a feature is correct
+	/**
+	 * Tests that adding a feature is correct. Checks X (state vector) and P
+	 * (covariance matrix). This is just a very simple test case where this
+	 * feature to be added is the only feature being tracked.
+	 */
 	public void testAddOneFeature() {
 
 		ekf.addFeature(0, 1);
@@ -105,18 +112,25 @@ public class EKFTests extends AndroidTestCase {
 
 	}
 
-	// This test just checks if re-observing one feature works
+	/**
+	 * This test just checks if re-observing one feature works (no exceptions)
+	 */
 	public void testReobserveFeature() {
-		Log.d(TAG, "TestReobserveFeature Start:" + ekf.getCurrDevicePose().toString());
+		// Log.d(TAG, "TestReobserveFeature Start:" +
+		// ekf.getCurrDevicePose().toString());
 		ekf.addFeature(0, 1);
 		ekf.predictFromINS(Math.sqrt(2), Math.PI / 4);
-		Log.d(TAG, "TestReobserveFeature After INS:" + ekf.getCurrDevicePose().toString());
+		// Log.d(TAG, "TestReobserveFeature After INS:" +
+		// ekf.getCurrDevicePose().toString());
 		ekf.updateFromReobservedFeature(0, 0.1, 1.1);
-		Log.d(TAG, "TestReobserveFeature After Reobserve Feature:" + ekf.getCurrDevicePose().toString());
+		// Log.d(TAG, "TestReobserveFeature After Reobserve Feature:" +
+		// ekf.getCurrDevicePose().toString());
 	}
 
-	// This test is the case where everything is perfect (prediction +
-	// correction)
+	/**
+	 * Case where everything is perfect (prediction + correction). Actual
+	 * movement is sqrt(2) units 45deg, then one unit 90deg
+	 */
 	public void testPerfectCase() {
 
 		// Log.d(TAG, "TestPerfectCase Start: " +
@@ -142,6 +156,58 @@ public class EKFTests extends AndroidTestCase {
 
 		assertEquals("Device X should be 1", 1.0, round2Decimals(ekf.getCurrDevicePose().get_xPos()));
 		assertEquals("Device X should be 2", 2.0, round2Decimals(ekf.getCurrDevicePose().get_yPos()));
+	}
+
+	/**
+	 * Case where INS is inaccurate but VINS is accurate, to check if the V-INS,
+	 * assuming it works perfectly, can correct faulty INS estimates. Actual
+	 * movement is sqrt(2) units 45deg, then one unit 90deg. VINS always
+	 * re-observes the feature at (0,50) but INS estimates are wrong.
+	 */
+	public void testBadINSGoodVINS() {
+
+		int correctFinalX = 1;
+		int correctFinalY = 2;
+
+		double expectedFinalXWithoutVINS = 1.232488628;
+		double expectedFinalYWithoutVINS = 2.125010273;
+
+		double actualErrorX = expectedFinalXWithoutVINS - correctFinalX;
+		double actualErrorY = expectedFinalYWithoutVINS - correctFinalY;
+
+		ekf.addFeature(0, 50);
+		Log.d(TAG, "TestBadINSGoodVINS Start: " + ekf.getCurrDevicePose().toString());
+
+		// INS has error of -0.1 and -5deg for distance and heading respectively
+		ekf.predictFromINS(Math.sqrt(2) - 0.1, Math.toDegrees(45 - 5));
+		Log.d(TAG, "TestBadINSGoodVINS After INS 1: " + ekf.getCurrDevicePose().toString());
+
+		ekf.updateFromReobservedFeature(0, 0, 50);
+		Log.d(TAG, "TestBadINSGoodVINS After Reobserve 1: " + ekf.getCurrDevicePose().toString());
+
+		// INS has error of 0.3 and -10deg for distance and heading respectively
+		ekf.predictFromINS(1 + 0.3, Math.toDegrees(90 - 10));
+		Log.d(TAG, "TestBadINSGoodVINS After INS 2: " + ekf.getCurrDevicePose().toString());
+
+		ekf.updateFromReobservedFeature(0, 0, 50);
+		Log.d(TAG, "TestBadINSGoodVINS After Reobserve 2: " + ekf.getCurrDevicePose().toString());
+
+		double errorXWithVINS = ekf.getCurrDevicePose().get_xPos() - correctFinalX;
+		double errorYWithVINS = (ekf.getCurrDevicePose().get_yPos() - correctFinalY);
+
+		double improvementX = Math.abs(actualErrorX) - Math.abs(errorXWithVINS);
+		double improvementY = Math.abs(actualErrorY) - Math.abs(errorYWithVINS);
+
+		// Log expected error w/o VINS, w/ VINS, and the improvement with VINS
+		// over pure INS
+		Log.d(TAG, "TestBadINSGoodVINS Actual Error X = " + actualErrorX + " y = " + actualErrorY);
+		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Error: x = " + errorXWithVINS + " y = " + errorYWithVINS);
+		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Improvement: x = " + improvementX + " y = " + improvementY);
+
+		// Improvements should be positive to mean that VINS affected the
+		// estimates positively
+		assertTrue(improvementX > 0);
+		assertTrue(improvementY > 0);
 	}
 
 	private double round2Decimals(double value) {
