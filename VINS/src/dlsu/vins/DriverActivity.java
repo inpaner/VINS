@@ -16,6 +16,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
 import ekf.EKF;
 import ekf.PointDouble;
 import features.FeatureManager;
@@ -35,8 +36,10 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 	private Sensor senAccelerometer, senGyroscope, senOrientation, senGravity, senMagnetField;
 
 	private float mGrav[], mMag[];
-	
+
 	private boolean isFeaturesReady = false;
+
+	private long timeLastRecorded;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -64,8 +67,8 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 		sensorManager.registerListener(this, senGravity, SensorManager.SENSOR_DELAY_FASTEST);
 		sensorManager.registerListener(this, senMagnetField, SensorManager.SENSOR_DELAY_FASTEST);
 
-		startInertialSensorLogging();
 		startDriver();
+		timeLastRecorded = System.currentTimeMillis();
 	}
 
 	@Override
@@ -81,13 +84,15 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 			public void run() {
 				runOneCycle();
 			}
-		}, 0, 3000);
+		}, 0, 333);
 	}
 
 	private void runOneCycle() {
-		if (!isFeaturesReady) return;
-		
-		try { 
+		if (!isFeaturesReady)
+			return;
+
+		try {
+			StringBuilder timeStringBuilder = new StringBuilder();
 			/* TRIGGER MOTION ESTIMATION */
 			DevicePose devicePose = motionEstimator.getHeadingAndDisplacement();
 
@@ -95,9 +100,11 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 			logString.append("Device Pose(ME): " + devicePose.toString() + "\n");
 
 			/* PASS DISTANCE & HEADING TO EKF.insUpdate() */
-			ekf.predictFromINS(devicePose.getXYDistance(), devicePose.getHeading());
+			ekf.predictFromINS(devicePose.getXYDistance(), Math.toRadians(devicePose.getHeading()));
 
 			logString.append("Device Pose(After EKF Predict): " + ekf.getCurrDevicePose().toString() + "\n");
+
+			long start = System.currentTimeMillis();
 
 			/* TRIGGER TRIANGULATION AND GET OLD, RE-OBSERVED, AND NEW FEATURES */
 			FeatureUpdate update = featureManager.getFeatureUpdate(devicePose);
@@ -105,6 +112,9 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 			logString.append("Features to Delete: " + update.getBadPointsIndex().size() + "\nFeatures to Update: "
 					+ update.getCurrentPoints().size() + "\nFeatures to Add: " + update.getNewPoints().size() + "\n");
 
+			timeStringBuilder.append("Triangulate took: " + (System.currentTimeMillis() - start) + "ms\n");
+
+			start = System.currentTimeMillis();
 			/* LOOP THROUGH THE RETURNED FEATURES */
 
 			/* IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex) */
@@ -125,8 +135,28 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 			for (PointDouble featpos : update.getNewPoints())
 				ekf.addFeature(featpos.getX(), featpos.getY());
 
+			timeStringBuilder.append("EKF took: " + (System.currentTimeMillis() - start) + "ms\n");
+			timeStringBuilder.append("Features to Delete: " + update.getBadPointsIndex().size()
+					+ "\nFeatures to Update: " + update.getCurrentPoints().size() + "\nFeatures to Add: "
+					+ update.getNewPoints().size() + "\n");
+
 			devicePose = ekf.getCurrDevicePose();
 			logString.append("Device Pose(EKF): " + devicePose.toString() + "\n");
+
+			final String timeString = timeStringBuilder.toString();
+			final DevicePose dev = devicePose;
+
+			this.runOnUiThread(new Runnable() {
+				@Override
+				public void run() {
+					TextView tv = (TextView) findViewById(R.id.debugTextView);
+					tv.setText(dev.toString() + "\n" + timeString.toString() + "\n" + tv.getText());
+					// tv.setText(dev.toString() + "\n" + tv.getText());
+					// tv.setText("world");
+				}
+
+			});
+
 			Log.i(TAG, logString.toString());
 
 		} catch (Exception e) {
@@ -136,28 +166,18 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 		}
 	}
 
-	private void startInertialSensorLogging() {
-		Timer recordTimer = new Timer();
-		recordTimer.scheduleAtFixedRate(new TimerTask() {
-			@Override
-			public void run() {
-				recordSensorEntry();
-			}
-		}, 0, 10);
-	}
-
-	private void recordSensorEntry() {
-		while (nextSensorEntryToAdd.status != SensorEntry.FULL)
-			; // TODO android occasionally force crashes this busy waiting loop
-		motionEstimator.inputData(nextSensorEntryToAdd);
-		nextSensorEntryToAdd = new SensorEntry();
-	}
-
 	@Override
 	public void onSensorChanged(SensorEvent sensorEvent) {
 
 		nextSensorEntryToAdd.status = SensorEntry.WRITING;
 		Sensor mySensor = sensorEvent.sensor;
+
+		long currTime = System.currentTimeMillis();
+		if (currTime - timeLastRecorded >= 10) {
+			motionEstimator.inputData(nextSensorEntryToAdd);
+			nextSensorEntryToAdd = new SensorEntry();
+			timeLastRecorded = currTime;
+		}
 
 		if (mySensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
 
