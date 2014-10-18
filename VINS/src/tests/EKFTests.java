@@ -183,7 +183,6 @@ public class EKFTests extends AndroidTestCase {
 		Log.d(TAG, "TestBadINSGoodVINS Start: " + ekf.getCurrDevicePose().toString());
 
 		// INS has 2 degree error for heading
-
 		for (int i = 1; i <= iterations; i++) {
 			ekf.predictFromINS(1, Math.toRadians(90 + 2));
 			Log.d(TAG, "TestBadINSGoodVINS After INS " + i + ": " + ekf.getCurrDevicePose().toString());
