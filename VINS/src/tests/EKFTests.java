@@ -165,29 +165,32 @@ public class EKFTests extends AndroidTestCase {
 	 * movement is sqrt(2) units 45deg, then one unit 90deg. VINS always
 	 * re-observes the feature at (0,50) but INS estimates are wrong.
 	 */
-	public void testBadINSGoodVINS() {
+	public void testBadINSGoodVINSUsingReobservedFeatureCoords() {
 
 		int correctFinalX = 0;
-		int correctFinalY = 1;
+		int correctFinalY = 9;
 
 		double radians92 = Math.toRadians(92);
 
-		PointDouble correctCoords = new PointDouble(0, 1);
-		PointDouble expectedCoordsWithoutEKF = new PointDouble(Math.cos(radians92), Math.sin(radians92));
+		int iterations = 1;
+
+		PointDouble correctCoords = new PointDouble(correctFinalX, correctFinalY);
+		PointDouble expectedCoordsWithoutEKF = new PointDouble(iterations * Math.cos(radians92), iterations
+				* Math.sin(radians92));
 		double errorWithoutEKF = correctCoords.computeDistanceTo(expectedCoordsWithoutEKF);
 
 		ekf.addFeature(0, 10);
 		Log.d(TAG, "TestBadINSGoodVINS Start: " + ekf.getCurrDevicePose().toString());
 
 		// INS has 2 degree error for heading
-		ekf.predictFromINS(1, Math.toRadians(90 + 2));
-		Log.d(TAG, "TestBadINSGoodVINS After INS 1: " + ekf.getCurrDevicePose().toString());
 
-		ekf.updateFromReobservedFeature(0, 10 * Math.cos(Math.toRadians(92)), 10 * Math.sin(Math.toRadians(92)));
-		Log.d(TAG, "TestBadINSGoodVINS After Reobserve 1: " + ekf.getCurrDevicePose().toString());
+		for (int i = 1; i <= iterations; i++) {
+			ekf.predictFromINS(1, Math.toRadians(90 + 2));
+			Log.d(TAG, "TestBadINSGoodVINS After INS " + i + ": " + ekf.getCurrDevicePose().toString());
 
-		double errorXWithVINS = ekf.getCurrDevicePose().get_xPos() - correctFinalX;
-		double errorYWithVINS = ekf.getCurrDevicePose().get_yPos() - correctFinalY;
+			ekf.updateFromReobservedFeature(0, 10 * Math.cos(Math.toRadians(92)), 10 * Math.sin(Math.toRadians(92)));
+			Log.d(TAG, "TestBadINSGoodVINS After Reobserve " + i + ": " + ekf.getCurrDevicePose().toString());
+		}
 
 		double errorWithEKF = correctCoords.computeDistanceTo(ekf.getDeviceCoords());
 
