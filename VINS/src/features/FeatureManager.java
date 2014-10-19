@@ -34,6 +34,8 @@ import android.view.SurfaceView;
 
 public class FeatureManager implements CvCameraViewListener2 {
 	private static final String TAG = "Feature Manager";
+	private final int frameInterval = 10; // Frames between near and far frame
+	
 	private final Scalar BLACK = new Scalar(0);
 	private final Scalar WHITE = new Scalar(255);
 
@@ -41,15 +43,21 @@ public class FeatureManager implements CvCameraViewListener2 {
 
 	private FeatureDetector detector;
 
-	private int frames = 0; // TODO: ivan sir what is this for, i dunno
+	private int frames = 0;
 	private CameraBridgeViewBase cameraView;
-
+	private boolean framesReady = false;
+	
 	// Optical flow fields
-	private MatOfPoint2f prevCurrent;
+	private MatOfPoint2f checkpointFeatures;
 	private MatOfPoint2f prevNew;
-	private Mat prevImage;
+	private Mat checkpointImage;
+	private Mat nearImage;
 	private Mat currentImage;
-
+	
+	
+	private List<MatOfPoint2f> prevNews;
+	private List<Mat> images;
+	
 	// Triangulation fields
 	private Size imageSize;
 	private Mat cameraMatrix, distCoeffs, Rot, T;
@@ -89,17 +97,19 @@ public class FeatureManager implements CvCameraViewListener2 {
 				case LoaderCallbackInterface.SUCCESS: {
 					Log.i(TAG, "OpenCV loaded successfully");
 					cameraView.enableView();
-					prevCurrent = new MatOfPoint2f();
+					checkpointFeatures = new MatOfPoint2f();
 					prevNew = new MatOfPoint2f();
-					prevImage = new Mat();
+					checkpointImage = new Mat();
+					
+					prevNews = new ArrayList<>();
+					images = new ArrayList<>();
+					
 					detector = FeatureDetector.create(FeatureDetector.FAST);
 					listener.initDone();
-				}
-					break;
+				} break;
 				default: {
 					super.onManagerConnected(status);
-				}
-					break;
+				} break;
 				}
 			}
 		};
@@ -167,188 +177,206 @@ public class FeatureManager implements CvCameraViewListener2 {
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
 		Log.d("VINS", "onCameraFrame");
 		currentImage = inputFrame.gray();
-		frames++;
 		return currentImage;
 	}
 
 	public FeatureUpdate getFeatureUpdate(DevicePose devicePose) {
 		Log.d(TAG, "Getting Feature Update");
-
-		Mat detectMask = currentImage.clone();
-		detectMask.setTo(WHITE);
-
 		FeatureUpdate update = new FeatureUpdate();
-		Log.i(TAG, 	"prevCurrent: " + prevCurrent.size() + 
-					"\nprevNew: " + prevNew.size());
-
-		if (prevCurrent.size().height + prevNew.size().height > 0) {
-
-			// // Optical Flow
-
-			MatOfByte status = new MatOfByte();
-			MatOfFloat err = new MatOfFloat();
-			MatOfPoint2f nextFeatures = new MatOfPoint2f();
-
-			int prevCurrentSize = (int) prevCurrent.size().height; // whut
-			if (prevNew != null && prevNew.size().height > 0)
-				prevCurrent.push_back(prevNew); // combined
-
-			Video.calcOpticalFlowPyrLK(prevImage, currentImage, prevCurrent, nextFeatures, status, err);
-
-			// Use status to filter out good points from bad
-
-			List<Point> oldPoints = prevCurrent.toList();
-			List<Point> newPoints = nextFeatures.toList();
-			List<Point> goodOldList = new ArrayList<>();
-			List<Point> goodNewList = new ArrayList<>();
-			List<Integer> badPointsIndex = new ArrayList<>();
-
+		
+		Mat nearImage = images.get(0);
+		Mat farImage = currentImage;
+		if (framesReady)
+			images.remove(0);
+		
+		
+		////// Optical Flow
+		
+		//// Checkpoint to near frame
+		
+		MatOfPoint2f nearFeatures = new MatOfPoint2f();
+		MatOfByte cpNearStatus = new MatOfByte();
+		MatOfFloat cpNearError = new MatOfFloat();
+		Mat detectMask = nearImage.clone();
+		detectMask.setTo(WHITE);
+		List<Point> nearFeaturesList = new ArrayList<>();
+		
+		if (checkpointFeatures.size().height > 0) {			
+			Video.calcOpticalFlowPyrLK(checkpointImage, nearImage, checkpointFeatures, nearFeatures, cpNearStatus, cpNearError);
+			 nearFeaturesList = nearFeatures.toList();
+			// draw mask for detection
+			
 			int index = 0;
-			int currentSize = 0;
-			for (Byte item : status.toList()) {
+			for (Byte item : cpNearStatus.toList()) {
 				if (item.intValue() == 1) {
-					if (index < prevCurrentSize)
-						currentSize++;
-					goodOldList.add(oldPoints.get(index));
-					goodNewList.add(newPoints.get(index));
-					Core.circle(detectMask, newPoints.get(index), 10, BLACK, -1); // mask
-																					// out
-																					// during
-																					// detection
-				} else if (index < prevCurrentSize) { // TODO: double check sir
-					badPointsIndex.add(Integer.valueOf(index));
+					Core.circle(detectMask, nearFeaturesList.get(index), 10, BLACK, -1);
 				}
 				index++;
+			}	
+		}
+		
+		MatOfKeyPoint rawNearNewFeatures = new MatOfKeyPoint();
+		MatOfPoint2f nearNewFeatures = new MatOfPoint2f();
+		detector.detect(nearImage, rawNearNewFeatures, detectMask);
+		if (rawNearNewFeatures.size().height > 0) {
+			nearNewFeatures = convert(rawNearNewFeatures);
+		}
+		
+		
+		//// Near frame to far frame
+		double currentSize = nearFeatures.size().height;
+		nearFeatures.push_back(nearNewFeatures);
+		nearFeaturesList.addAll(nearNewFeatures.toList());
+		
+		MatOfPoint2f farFeatures = new MatOfPoint2f();
+		MatOfByte nearFarStatus = new MatOfByte();
+		MatOfFloat nearFarError = new MatOfFloat();
+					
+		Video.calcOpticalFlowPyrLK(nearImage, farImage, nearFeatures, farFeatures, nearFarStatus, nearFarError);
+		
+		List<Point> farFeaturesList = farFeatures.toList();
+		List<Point> goodNearFeaturesList = new ArrayList<>();
+		List<Point> goodFarFeaturesList = new ArrayList<>();
+		List<Integer> badPointsIndex = new ArrayList<>();
+		
+		// Find good features, bad features index
+		
+		int index = 0;
+		List<Byte> nearFarStatusList = nearFarStatus.toList();
+		for (Byte firstStatus : cpNearStatus.toList()) {
+			Byte secondStatus = nearFarStatusList.get(index); 
+			
+			// Good feature only if flowed from all three images
+			if ((firstStatus.intValue() & secondStatus.intValue()) == 1) {
+				goodNearFeaturesList.add( nearFeaturesList.get(index) );
+				goodFarFeaturesList.add( farFeaturesList.get(index) );			
+			} else if (index < currentSize) {
+				badPointsIndex.add(Integer.valueOf(index));
 			}
+			index++;
+		}
+		
+			
+		// Convert from List to OpenCV matrix for triangulation
 
-			// Convert from List to OpenCV matrix for triangulation
+		MatOfPoint2f goodNearFeatures = new MatOfPoint2f();
+		MatOfPoint2f goodFarFeatures = new MatOfPoint2f();
+		goodNearFeatures.fromList(goodNearFeaturesList);
+		goodFarFeatures.fromList(goodFarFeaturesList);
 
-			MatOfPoint2f goodOld = new MatOfPoint2f();
-			MatOfPoint2f goodNew = new MatOfPoint2f();
-			goodOld.fromList(goodOldList);
-			goodNew.fromList(goodNewList);
+		//// Triangulation
 
-			// Triangulation
+		// TODO: might want to initialize points4D with a large Nx4 Array
+		// so that both memory and time will be saved (instead of
+		// reallocation each time)
+		// TODO: consider separating triangulation into different class
 
-			// TODO: might want to initialize points4D with a large Nx4 Array
-			// so that both memory and time will be saved (instead of
-			// reallocation each time)
-			// TODO: consider separating triangulation into different class
+		if (!goodNearFeatures.empty() && !goodFarFeatures.empty()) {
+			// SOLVING FOR THE ROTATION AND TRANSLATION MATRICES
 
-			if (!goodOld.empty() && !goodNew.empty()) {
-				// SOLVING FOR THE ROTATION AND TRANSLATION MATRICES
+			// GETTING THE FUNDAMENTAL MATRIX
 
-				// GETTING THE FUNDAMENTAL MATRIX
+			F = Calib3d.findFundamentalMat(goodNearFeatures, goodFarFeatures);
 
-				F = Calib3d.findFundamentalMat(goodOld, goodNew);
+			cameraMatrix = cameraMatrix.clone();
 
-				cameraMatrix = cameraMatrix.clone();
+			tempMat = nullMatF.clone();
+			E = nullMatF.clone();
 
-				tempMat = nullMatF.clone();
-				E = nullMatF.clone();
+			// GETTING THE ESSENTIAL MATRIX
 
-				// GETTING THE ESSENTIAL MATRIX
+			Core.gemm(cameraMatrix.t(), F, 1, nullMatF, 0, tempMat);
+			Core.gemm(tempMat, cameraMatrix, 1, nullMatF, 0, E);
 
-				Core.gemm(cameraMatrix.t(), F, 1, nullMatF, 0, tempMat);
-				Core.gemm(tempMat, cameraMatrix, 1, nullMatF, 0, E);
+			W = Mat.zeros(3, 3, CvType.CV_64F);
+			W.put(0, 1, -1);
+			W.put(1, 0, 1);
+			W.put(2, 2, 1);
+			u = nullMatF.clone();
+			w = nullMatF.clone();
+			vt = nullMatF.clone();
 
-				W = Mat.zeros(3, 3, CvType.CV_64F);
-				W.put(0, 1, -1);
-				W.put(1, 0, 1);
-				W.put(2, 2, 1);
-				u = nullMatF.clone();
-				w = nullMatF.clone();
-				vt = nullMatF.clone();
+			// DECOMPOSING ESSENTIAL MATRIX TO GET THE ROTATION AND
+			// TRANSLATION MATRICES
 
-				// DECOMPOSING ESSENTIAL MATRIX TO GET THE ROTATION AND
-				// TRANSLATION MATRICES
+			// Decomposing Essential Matrix to obtain Rotation and
+			// Translation Matrices
 
-				// Decomposing Essential Matrix to obtain Rotation and
-				// Translation Matrices
+			Core.SVDecomp(E, w, u, vt);
 
-				Core.SVDecomp(E, w, u, vt);
+			Core.gemm(u, W, 1, nullMatF, 0, tempMat);
+			Core.gemm(tempMat, vt, 1, nullMatF, 0, Rot);
+			T = u.col(2);
 
-				Core.gemm(u, W, 1, nullMatF, 0, tempMat);
-				Core.gemm(tempMat, vt, 1, nullMatF, 0, Rot);
-				T = u.col(2);
+			// (DEBUG) LOGGING THE VARIOUS MATRICES
 
-				// (DEBUG) LOGGING THE VARIOUS MATRICES
+			// Log.i("E", E.dump());
+			// Log.i("K", cameraMatrix.dump());
+			// Log.i("F", F.dump());
+			// Log.i("K", cameraMatrix.dump());
+			// Log.i("E", E.dump());
+			// Log.i("w", w.dump());
+			// Log.i("u", u.dump());
+			// Log.i("vt", vt.dump());
+			// Log.i("r", Rot.dump());
+			// Log.i("t", T.dump());
+			// Log.i("nullMatF", nullMatF.dump());
 
-				// Log.i("E", E.dump());
-				// Log.i("K", cameraMatrix.dump());
-				// Log.i("F", F.dump());
-				// Log.i("K", cameraMatrix.dump());
-				// Log.i("E", E.dump());
-				// Log.i("w", w.dump());
-				// Log.i("u", u.dump());
-				// Log.i("vt", vt.dump());
-				// Log.i("r", Rot.dump());
-				// Log.i("t", T.dump());
-				// Log.i("nullMatF", nullMatF.dump());
+			RotW = Mat.zeros(3, 3, CvType.CV_64F);
+			RotW.put(0, 0, devicePose.getRotWorld().getArray()[0]);
+			RotW.put(1, 0, devicePose.getRotWorld().getArray()[1]);
+			RotW.put(2, 0, devicePose.getRotWorld().getArray()[2]);
+			RotFinal = Mat.zeros(3, 3, CvType.CV_64F);
+			Core.gemm(RotW, Rot, 1, Mat.zeros(0, 0, CvType.CV_64F), 0, RotFinal);
 
-				RotW = Mat.zeros(3, 3, CvType.CV_64F);
-				RotW.put(0, 0, devicePose.getRotWorld().getArray()[0]);
-				RotW.put(1, 0, devicePose.getRotWorld().getArray()[1]);
-				RotW.put(2, 0, devicePose.getRotWorld().getArray()[2]);
-				RotFinal = Mat.zeros(3, 3, CvType.CV_64F);
-				Core.gemm(RotW, Rot, 1, Mat.zeros(0, 0, CvType.CV_64F), 0, RotFinal);
+			points4D = Mat.zeros(1, 4, CvType.CV_64F);
+			Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, RotFinal, T, R1, R2, P1,
+					P2, Q);
+			Calib3d.triangulatePoints(P1, P2, goodNearFeatures, goodFarFeatures, points4D);
+			
+			double transPixel[] = T.t().get(0, 0);
+			double transMetric[] = {devicePose.get_xPos(), devicePose.get_yPos(), devicePose.get_zPos()};
+			double metricScale = 0;
+			
+			for(int i = 0; i < transPixel.length; ++i)
+				metricScale += transMetric[i]/transPixel[i];
+			metricScale /= 3;
 
-				points4D = Mat.zeros(1, 4, CvType.CV_64F);
-				Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, RotFinal, T, R1, R2, P1,
-						P2, Q);
-				Calib3d.triangulatePoints(P1, P2, goodOld, goodNew, points4D);
-				
-				double transPixel[] = T.t().get(0, 0);
-				double transMetric[] = {devicePose.get_xPos(), devicePose.get_yPos(), devicePose.get_zPos()};
-				double metricScale = 0;
-				
-				for(int i = 0; i < transPixel.length; ++i)
-					metricScale += transMetric[i]/transPixel[i];
-				metricScale /= 3;
+			// TODO: maybe this method is more optimized??
+			// Mat points3D = new Mat();
+			// Calib3d.convertPointsFromHomogeneous(points4D, points3D);				
+			
+			
+			// Log.i(TAG, "points4D size: " + points4D.size().width);
+			// Log.i(TAG, T.dump());
+			// Log.i(TAG, devicePose.toString());
 
-				// TODO: maybe this method is more optimized??
-				// Mat points3D = new Mat();
-				// Calib3d.convertPointsFromHomogeneous(points4D, points3D);
-				
-				// becomes 2n: n (with method above) + n (iterating to split into current and new
-				// I mean, sure, 2n 
+			List<PointDouble> current2d = new ArrayList<>();
+			List<PointDouble> new2d = new ArrayList<>();
+			for (int i = 0; i < goodNearFeatures.height(); i++) {
+				double x = points4D.get(0, i)[0] * metricScale / points4D.get(3, i)[0];
+				double y = points4D.get(1, i)[0] * metricScale / points4D.get(3, i)[0];
 
-				// Split points to current and new PointDouble
-				// TODO verify this shit
-				// TODO yass corrected
-
-//				Log.i(TAG, "points4D size: " + points4D.size().width);
-//				Log.i(TAG, T.dump());
-//				Log.i(TAG, devicePose.toString());
-
-				List<PointDouble> current2d = new ArrayList<>();
-				List<PointDouble> new2d = new ArrayList<>();
-				for (int i = 0; i < goodOld.height(); i++) {
-					double x = points4D.get(0, i)[0] * metricScale / points4D.get(3, i)[0];
-					double y = points4D.get(1, i)[0] * metricScale / points4D.get(3, i)[0];
-
-					PointDouble point = new PointDouble(x, y);
-					if (i < currentSize) {
-						current2d.add(point);
-					} else {
-						new2d.add(point);
-					}
+				PointDouble point = new PointDouble(x, y);
+				if (i < currentSize) {
+					current2d.add(point);
+				} else {
+					new2d.add(point);
 				}
-				update.setCurrentPoints(current2d);
-				update.setNewPoints(new2d);
 			}
-			update.setBadPointsIndex(badPointsIndex);
-			goodNew.copyTo(prevCurrent);
+			update.setCurrentPoints(current2d);
+			update.setNewPoints(new2d);
 		}
+		update.setBadPointsIndex(badPointsIndex);
+		goodNearFeatures.copyTo(checkpointFeatures);
+	
 
-		// Detect new points based on optical flow mask
-		MatOfKeyPoint newFeatures = new MatOfKeyPoint();
-		detector.detect(currentImage, newFeatures, detectMask);
-		if (newFeatures.size().height > 0) {
-			prevNew = convert(newFeatures);
+		images.add(farImage);
+		nearImage.copyTo(checkpointImage);
+		frames++;
+		if (frames == frameInterval + 3) {
+			framesReady = true;
 		}
-
-		currentImage.copyTo(prevImage);
 		return update;
 	}
 
