@@ -167,7 +167,7 @@ public class EKFTests extends AndroidTestCase {
 	 */
 	public void testBadINSGoodVINSUsingReobservedFeatureCoords() {
 
-		int iterations = 9;
+		int iterations = 3;
 		int correctFinalX = 0;
 		int correctFinalY = iterations;
 		double radians92 = Math.toRadians(92);
