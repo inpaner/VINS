@@ -163,18 +163,13 @@ public class EKF {
 	/********** V-INS Update **********/
 
 	// Method for correcting the state vector based on re-observed features.
-	public void updateFromReobservedFeature(int featureIndex, double fX, double fY) {
+	public void updateFromReobservedFeatureThroughDistanceHeading(int featureIndex, double observedDistance, double observedHeading) {
 
-		PointDouble featureCoords = this.getFeatureCoordsFromStateVector(featureIndex);
 		PointDouble deviceCoords = this.getDeviceCoords();
-		PointDouble observedFeatureCoords = new PointDouble(fX, fY);
-
-		/* Calculate the observed distance and heading */
-		double observedDistance = deviceCoords.computeDistanceTo(observedFeatureCoords);
-		double observedHeading = deviceCoords.computeRadiansTo(observedFeatureCoords) - this.getHeadingRadians();
+		PointDouble featureCoords = this.getFeatureCoordsFromStateVector(featureIndex);
 
 		/* Calculate the Kalman Gain */
-		Matrix hMatrix = this.createH(observedDistance, featureIndex, observedFeatureCoords, deviceCoords);
+		Matrix hMatrix = this.createH(observedDistance, featureIndex, featureCoords, deviceCoords);
 		Matrix pMatrix = this.extractSubMatrix(0, P.size() - 1, 0, P.size() - 1);
 		Matrix hphMatrix = hMatrix.times(pMatrix).times(hMatrix.transpose());
 		Matrix vrvMatrix = this.createVRVMatrix(observedDistance);
@@ -201,6 +196,18 @@ public class EKF {
 		for (int i = 0; i < x.length; i++)
 			X.add(x[i][0]);
 
+	}
+
+	public void updateFromReobservedFeatureCoords(int featureIndex, double fX, double fY) {
+
+		PointDouble deviceCoords = this.getDeviceCoords();
+		PointDouble observedFeatureCoords = new PointDouble(fX, fY);
+
+		/* Calculate the observed distance and heading */
+		double observedDistance = deviceCoords.computeDistanceTo(observedFeatureCoords);
+		double observedHeading = deviceCoords.computeRadiansTo(observedFeatureCoords) - this.getHeadingRadians();
+
+		this.updateFromReobservedFeatureThroughDistanceHeading(featureIndex, observedDistance, observedHeading);
 	}
 
 	// Method for deleting a feature. Includes removing the feature from the

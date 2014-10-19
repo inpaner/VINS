@@ -54,6 +54,10 @@ public class DevicePose {
 		return heading;
 	}
 
+	public double getHeadingRadians() {
+		return Math.toRadians(heading);
+	}
+
 	public void setHeading(double heading) {
 		this.heading = heading;
 	}
