@@ -167,12 +167,10 @@ public class EKFTests extends AndroidTestCase {
 	 */
 	public void testBadINSGoodVINSUsingReobservedFeatureCoords() {
 
+		int iterations = 9;
 		int correctFinalX = 0;
-		int correctFinalY = 9;
-
+		int correctFinalY = iterations;
 		double radians92 = Math.toRadians(92);
-
-		int iterations = 1;
 
 		PointDouble correctCoords = new PointDouble(correctFinalX, correctFinalY);
 		PointDouble expectedCoordsWithoutEKF = new PointDouble(iterations * Math.cos(radians92), iterations
@@ -189,14 +187,12 @@ public class EKFTests extends AndroidTestCase {
 			ekf.predictFromINS(1, Math.toRadians(90 + 2));
 			Log.d(TAG, "TestBadINSGoodVINS After INS " + i + ": " + ekf.getCurrDevicePose().toString());
 
-			PointDouble currDeviceCoords = ekf.getDeviceCoords();
-
-			double observedDistance = currDeviceCoords.computeDistanceTo(featureCoords);
-			double observedHeading = currDeviceCoords.computeRadiansTo(featureCoords)
-					- ekf.getCurrDevicePose().getHeadingRadians();
-
+			double observedDistance = 10 - i;
+			double observedHeading = 0;
 			ekf.updateFromReobservedFeatureThroughDistanceHeading(0, observedDistance, observedHeading);
-			Log.d(TAG, "TestBadINSGoodVINS After Reobserve " + i + ": " + ekf.getCurrDevicePose().toString());
+
+			Log.d(TAG, "TestBadINSGoodVINS After Reobserve " + i + ": " + ekf.getCurrDevicePose().toString()
+					+ " with observedDistance = " + observedDistance + " and observedHeading = " + observedHeading);
 		}
 
 		double errorWithEKF = correctCoords.computeDistanceTo(ekf.getDeviceCoords());
@@ -205,9 +201,9 @@ public class EKFTests extends AndroidTestCase {
 
 		// Log expected error w/o VINS, w/ VINS, and the improvement with VINS
 		// over pure INS
-		Log.d(TAG, "TestBadINSGoodVINS Actual Error X = " + errorWithoutEKF);
-		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Error: x = " + errorWithEKF);
-		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Improvement: x = " + improvement);
+		Log.d(TAG, "TestBadINSGoodVINS Without EKF Error X = " + errorWithoutEKF);
+		Log.d(TAG, "TestBadINSGoodVINS With EKF Error: x = " + errorWithEKF);
+		Log.d(TAG, "TestBadINSGoodVINS With EKF Improvement: x = " + improvement);
 
 		// Improvements should be positive to mean that VINS affected the
 		// estimates positively
