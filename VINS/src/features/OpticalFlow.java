@@ -60,8 +60,6 @@ class OpticalFlow {
 			nearNewFeatures = convert(rawNearNewFeatures);
 		}
 		
-		Log.d("MOO", nearNewFeatures.size() + "");
-		
 		//// Near frame to far frame
 		
 		double currentSize = nearFeatures.size().height;
@@ -91,16 +89,20 @@ class OpticalFlow {
 		}
 		
 		for (Byte firstStatus : nearFarStatus.toList()) {
-			Byte secondStatus = null;
-			if (hasCurrent) 
-				 secondStatus = cpNearStatusList.get(index); 
+			boolean isGood = false;
+			if (index < currentSize) {
+				Byte secondStatus = cpNearStatusList.get(index);
+				if ((firstStatus.intValue() & secondStatus.intValue()) == 1) {  
+					isGood = true;
+				}
+			} else if ((firstStatus.intValue() & 1) == 1) {
+				isGood = true;
+			}
 			
-			// Good feature only if flowed from all three images
-			if (hasCurrent && (firstStatus.intValue() & secondStatus.intValue()) == 1 // current and new features 
-					|| firstStatus.intValue() == 1) { // new features only 
+			if (isGood) {
 				goodNearFeaturesList.add( nearFeaturesList.get(index) );
-				goodFarFeaturesList.add( farFeaturesList.get(index) );			
-			} else if (index < currentSize) {
+				goodFarFeaturesList.add( farFeaturesList.get(index) );
+			} else {
 				badPointsIndex.add(Integer.valueOf(index));
 			}
 			index++;

@@ -39,6 +39,9 @@ public class FeatureManager implements CvCameraViewListener2 {
 	private final Scalar BLACK = new Scalar(0);
 	private final Scalar WHITE = new Scalar(255);
 
+	private OpticalFlow opticalFlow;
+	
+	
 	private BaseLoaderCallback loaderCallback;
 	private FeatureDetector detector;
 
@@ -91,6 +94,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 				switch (status) {
 				case LoaderCallbackInterface.SUCCESS: {
 					Log.i(TAG, "OpenCV loaded successfully");
+					opticalFlow = new OpticalFlow();
 					cameraView.enableView();
 					checkpointFeatures = new MatOfPoint2f();
 					checkpointImage = new Mat();
@@ -177,20 +181,25 @@ public class FeatureManager implements CvCameraViewListener2 {
 		// Delay
 		
 		if (!framesReady) {
-			images.add(currentImage);
+			Mat toAdd = new Mat();
+			currentImage.copyTo(toAdd);;
+			images.add(toAdd);
 			if (frames == frameInterval + 3) {
 				framesReady = true;
 			}
 			frames++;
+			Log.d("SIZE", images.size()+ " " );
+			
 			return update;
 		}
 		
 		////// Optical Flow
+		Mat nearImage = new Mat();
+		images.get(0).copyTo(nearImage);
+				
+		Mat farImage = new Mat();
+		currentImage.copyTo(farImage);
 		
-		Mat nearImage = images.get(0);
-		Mat farImage = currentImage;
-		
-		OpticalFlow opticalFlow = new OpticalFlow();
 		OpticalFlowResult opflowresult = opticalFlow.getFeatures(checkpointImage, nearImage, farImage, checkpointFeatures);
 		
 		////// Triangulation
