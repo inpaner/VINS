@@ -34,13 +34,12 @@ import android.view.SurfaceView;
 
 public class FeatureManager implements CvCameraViewListener2 {
 	private static final String TAG = "Feature Manager";
-	private final int frameInterval = 10; // Frames between near and far frame
+	private final int frameInterval = 3; // Frames between near and far frame
 	
 	private final Scalar BLACK = new Scalar(0);
 	private final Scalar WHITE = new Scalar(255);
 
 	private BaseLoaderCallback loaderCallback;
-
 	private FeatureDetector detector;
 
 	private int frames = 0;
@@ -49,13 +48,9 @@ public class FeatureManager implements CvCameraViewListener2 {
 	
 	// Optical flow fields
 	private MatOfPoint2f checkpointFeatures;
-	private MatOfPoint2f prevNew;
 	private Mat checkpointImage;
-	private Mat nearImage;
 	private Mat currentImage;
 	
-	
-	private List<MatOfPoint2f> prevNews;
 	private List<Mat> images;
 	
 	// Triangulation fields
@@ -98,12 +93,8 @@ public class FeatureManager implements CvCameraViewListener2 {
 					Log.i(TAG, "OpenCV loaded successfully");
 					cameraView.enableView();
 					checkpointFeatures = new MatOfPoint2f();
-					prevNew = new MatOfPoint2f();
 					checkpointImage = new Mat();
-					
-					prevNews = new ArrayList<>();
 					images = new ArrayList<>();
-					
 					detector = FeatureDetector.create(FeatureDetector.FAST);
 					listener.initDone();
 				} break;
@@ -171,8 +162,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 		initRectifyVariables();
 	}
 
-	public void onCameraViewStopped() {
-	}
+	public void onCameraViewStopped() {}
 
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
 		Log.d("VINS", "onCameraFrame");
@@ -184,97 +174,39 @@ public class FeatureManager implements CvCameraViewListener2 {
 		Log.d(TAG, "Getting Feature Update");
 		FeatureUpdate update = new FeatureUpdate();
 		
-		Mat nearImage = images.get(0);
-		Mat farImage = currentImage;
-		if (framesReady)
-			images.remove(0);
+		// Delay
 		
+		if (!framesReady) {
+			images.add(currentImage);
+			if (frames == frameInterval + 3) {
+				framesReady = true;
+			}
+			frames++;
+			return update;
+		}
 		
 		////// Optical Flow
 		
-		//// Checkpoint to near frame
+		Mat nearImage = images.get(0);
+		Mat farImage = currentImage;
 		
-		MatOfPoint2f nearFeatures = new MatOfPoint2f();
-		MatOfByte cpNearStatus = new MatOfByte();
-		MatOfFloat cpNearError = new MatOfFloat();
-		Mat detectMask = nearImage.clone();
-		detectMask.setTo(WHITE);
-		List<Point> nearFeaturesList = new ArrayList<>();
+		OpticalFlow opticalFlow = new OpticalFlow();
+		OpticalFlowResult opflowresult = opticalFlow.getFeatures(checkpointImage, nearImage, farImage, checkpointFeatures);
 		
-		if (checkpointFeatures.size().height > 0) {			
-			Video.calcOpticalFlowPyrLK(checkpointImage, nearImage, checkpointFeatures, nearFeatures, cpNearStatus, cpNearError);
-			 nearFeaturesList = nearFeatures.toList();
-			// draw mask for detection
-			
-			int index = 0;
-			for (Byte item : cpNearStatus.toList()) {
-				if (item.intValue() == 1) {
-					Core.circle(detectMask, nearFeaturesList.get(index), 10, BLACK, -1);
-				}
-				index++;
-			}	
-		}
-		
-		MatOfKeyPoint rawNearNewFeatures = new MatOfKeyPoint();
-		MatOfPoint2f nearNewFeatures = new MatOfPoint2f();
-		detector.detect(nearImage, rawNearNewFeatures, detectMask);
-		if (rawNearNewFeatures.size().height > 0) {
-			nearNewFeatures = convert(rawNearNewFeatures);
-		}
-		
-		
-		//// Near frame to far frame
-		double currentSize = nearFeatures.size().height;
-		nearFeatures.push_back(nearNewFeatures);
-		nearFeaturesList.addAll(nearNewFeatures.toList());
-		
-		MatOfPoint2f farFeatures = new MatOfPoint2f();
-		MatOfByte nearFarStatus = new MatOfByte();
-		MatOfFloat nearFarError = new MatOfFloat();
-					
-		Video.calcOpticalFlowPyrLK(nearImage, farImage, nearFeatures, farFeatures, nearFarStatus, nearFarError);
-		
-		List<Point> farFeaturesList = farFeatures.toList();
-		List<Point> goodNearFeaturesList = new ArrayList<>();
-		List<Point> goodFarFeaturesList = new ArrayList<>();
-		List<Integer> badPointsIndex = new ArrayList<>();
-		
-		// Find good features, bad features index
-		
-		int index = 0;
-		List<Byte> nearFarStatusList = nearFarStatus.toList();
-		for (Byte firstStatus : cpNearStatus.toList()) {
-			Byte secondStatus = nearFarStatusList.get(index); 
-			
-			// Good feature only if flowed from all three images
-			if ((firstStatus.intValue() & secondStatus.intValue()) == 1) {
-				goodNearFeaturesList.add( nearFeaturesList.get(index) );
-				goodFarFeaturesList.add( farFeaturesList.get(index) );			
-			} else if (index < currentSize) {
-				badPointsIndex.add(Integer.valueOf(index));
-			}
-			index++;
-		}
-		
-			
-		// Convert from List to OpenCV matrix for triangulation
-
-		MatOfPoint2f goodNearFeatures = new MatOfPoint2f();
-		MatOfPoint2f goodFarFeatures = new MatOfPoint2f();
-		goodNearFeatures.fromList(goodNearFeaturesList);
-		goodFarFeatures.fromList(goodFarFeaturesList);
-
-		//// Triangulation
+		////// Triangulation
 
 		// TODO: might want to initialize points4D with a large Nx4 Array
 		// so that both memory and time will be saved (instead of
 		// reallocation each time)
 		// TODO: consider separating triangulation into different class
 
-		if (!goodNearFeatures.empty() && !goodFarFeatures.empty()) {
-			// SOLVING FOR THE ROTATION AND TRANSLATION MATRICES
+		if (opflowresult.isNotEmpty()) {
+			MatOfPoint2f goodNearFeatures = opflowresult.getNearFeatures();
+			MatOfPoint2f goodFarFeatures = opflowresult.getFarFeatures();
+			double currentSize = opflowresult.getCurrentSize();
+			// Solving for Rotation and Translation Matrices
 
-			// GETTING THE FUNDAMENTAL MATRIX
+			// Obtaining the Fundamental Matrix
 
 			F = Calib3d.findFundamentalMat(goodNearFeatures, goodFarFeatures);
 
@@ -283,7 +215,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 			tempMat = nullMatF.clone();
 			E = nullMatF.clone();
 
-			// GETTING THE ESSENTIAL MATRIX
+			// Obtaining the Essential Matrix
 
 			Core.gemm(cameraMatrix.t(), F, 1, nullMatF, 0, tempMat);
 			Core.gemm(tempMat, cameraMatrix, 1, nullMatF, 0, E);
@@ -296,11 +228,7 @@ public class FeatureManager implements CvCameraViewListener2 {
 			w = nullMatF.clone();
 			vt = nullMatF.clone();
 
-			// DECOMPOSING ESSENTIAL MATRIX TO GET THE ROTATION AND
-			// TRANSLATION MATRICES
-
-			// Decomposing Essential Matrix to obtain Rotation and
-			// Translation Matrices
+			// Decomposing Essential Matrix to obtain Rotation and Translation Matrices
 
 			Core.SVDecomp(E, w, u, vt);
 
@@ -330,8 +258,8 @@ public class FeatureManager implements CvCameraViewListener2 {
 			Core.gemm(RotW, Rot, 1, Mat.zeros(0, 0, CvType.CV_64F), 0, RotFinal);
 
 			points4D = Mat.zeros(1, 4, CvType.CV_64F);
-			Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, RotFinal, T, R1, R2, P1,
-					P2, Q);
+			Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), 
+					imageSize, RotFinal, T, R1, R2, P1, P2, Q);
 			Calib3d.triangulatePoints(P1, P2, goodNearFeatures, goodFarFeatures, points4D);
 			
 			double transPixel[] = T.t().get(0, 0);
@@ -345,7 +273,6 @@ public class FeatureManager implements CvCameraViewListener2 {
 			// TODO: maybe this method is more optimized??
 			// Mat points3D = new Mat();
 			// Calib3d.convertPointsFromHomogeneous(points4D, points3D);				
-			
 			
 			// Log.i(TAG, "points4D size: " + points4D.size().width);
 			// Log.i(TAG, T.dump());
@@ -367,28 +294,14 @@ public class FeatureManager implements CvCameraViewListener2 {
 			update.setCurrentPoints(current2d);
 			update.setNewPoints(new2d);
 		}
-		update.setBadPointsIndex(badPointsIndex);
-		goodNearFeatures.copyTo(checkpointFeatures);
+		update.setBadPointsIndex(opflowresult.getBadPointsIndex());
+		opflowresult.getNearFeatures().copyTo(checkpointFeatures);
 	
-
 		images.add(farImage);
 		nearImage.copyTo(checkpointImage);
 		frames++;
-		if (frames == frameInterval + 3) {
-			framesReady = true;
-		}
+		images.remove(0);
 		return update;
-	}
-
-	private MatOfPoint2f convert(MatOfKeyPoint keyPoints) {
-		KeyPoint[] keyPointsArray = keyPoints.toArray();
-		Point[] pointsArray = new Point[keyPointsArray.length];
-
-		for (int i = 0; i < keyPointsArray.length; i++) {
-			pointsArray[i] = (Point) keyPointsArray[i].pt;
-		}
-
-		return new MatOfPoint2f(pointsArray);
 	}
 	
 }
