@@ -94,17 +94,17 @@ class OpticalFlow {
 				Byte secondStatus = cpNearStatusList.get(index);
 				if ((firstStatus.intValue() & secondStatus.intValue()) == 1) {  
 					isGood = true;
+				} else {
+					badPointsIndex.add(Integer.valueOf(index));
 				}
-			} else if ((firstStatus.intValue() & 1) == 1) {
+			} else {
 				isGood = true;
 			}
 			
 			if (isGood) {
 				goodNearFeaturesList.add( nearFeaturesList.get(index) );
 				goodFarFeaturesList.add( farFeaturesList.get(index) );
-			} else {
-				badPointsIndex.add(Integer.valueOf(index));
-			}
+			} 
 			index++;
 		}
 			

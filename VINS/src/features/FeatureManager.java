@@ -188,8 +188,6 @@ public class FeatureManager implements CvCameraViewListener2 {
 				framesReady = true;
 			}
 			frames++;
-			Log.d("SIZE", images.size()+ " " );
-			
 			return update;
 		}
 		
