@@ -129,7 +129,7 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 			 */
 			int i = 0;
 			for (PointDouble featpos : update.getCurrentPoints())
-				ekf.updateFromReobservedFeature(i++, featpos.getX(), featpos.getY());
+				ekf.updateFromReobservedFeatureCoords(i++, featpos.getX(), featpos.getY());
 
 			/* IF NEW FEATURE, CALL EKF.addFeature(x, y) */ 
 			for (PointDouble featpos : update.getNewPoints())

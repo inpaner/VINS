@@ -123,7 +123,7 @@ public class EKFTests extends AndroidTestCase {
 		ekf.predictFromINS(Math.sqrt(2), Math.PI / 4);
 		// Log.d(TAG, "TestReobserveFeature After INS:" +
 		// ekf.getCurrDevicePose().toString());
-		ekf.updateFromReobservedFeature(0, 0.1, 1.1);
+		ekf.updateFromReobservedFeatureThroughDistanceHeading(0, 0.1, 1.1);
 		// Log.d(TAG, "TestReobserveFeature After Reobserve Feature:" +
 		// ekf.getCurrDevicePose().toString());
 	}
@@ -141,7 +141,7 @@ public class EKFTests extends AndroidTestCase {
 
 		// Log.d(TAG, "TestPerfectCase After INS 1: " +
 		// ekf.getCurrDevicePose().toString());
-		ekf.updateFromReobservedFeature(0, 0, 5);
+		ekf.updateFromReobservedFeatureCoords(0, 0, 5);
 
 		// Log.d(TAG, "TestPerfectCase After Reobserve 1: " +
 		// ekf.getCurrDevicePose().toString());
@@ -150,7 +150,7 @@ public class EKFTests extends AndroidTestCase {
 
 		// Log.d(TAG, "TestPerfectCase After INS 2: " +
 		// ekf.getCurrDevicePose().toString());
-		ekf.updateFromReobservedFeature(0, 0, 5);
+		ekf.updateFromReobservedFeatureCoords(0, 0, 5);
 
 		// Log.d(TAG, "TestPerfectCase After Reobserve 2: " +
 		// ekf.getCurrDevicePose().toString());
@@ -167,19 +167,19 @@ public class EKFTests extends AndroidTestCase {
 	 */
 	public void testBadINSGoodVINSUsingReobservedFeatureCoords() {
 
+		int iterations = 3;
 		int correctFinalX = 0;
-		int correctFinalY = 9;
-
+		int correctFinalY = iterations;
 		double radians92 = Math.toRadians(92);
-
-		int iterations = 1;
 
 		PointDouble correctCoords = new PointDouble(correctFinalX, correctFinalY);
 		PointDouble expectedCoordsWithoutEKF = new PointDouble(iterations * Math.cos(radians92), iterations
 				* Math.sin(radians92));
+
 		double errorWithoutEKF = correctCoords.computeDistanceTo(expectedCoordsWithoutEKF);
 
-		ekf.addFeature(0, 10);
+		PointDouble featureCoords = new PointDouble(0, 10);
+		ekf.addFeature(featureCoords.getX(), featureCoords.getY());
 		Log.d(TAG, "TestBadINSGoodVINS Start: " + ekf.getCurrDevicePose().toString());
 
 		// INS has 2 degree error for heading
@@ -187,8 +187,12 @@ public class EKFTests extends AndroidTestCase {
 			ekf.predictFromINS(1, Math.toRadians(90 + 2));
 			Log.d(TAG, "TestBadINSGoodVINS After INS " + i + ": " + ekf.getCurrDevicePose().toString());
 
-			ekf.updateFromReobservedFeature(0, 10 * Math.cos(Math.toRadians(92)), 10 * Math.sin(Math.toRadians(92)));
-			Log.d(TAG, "TestBadINSGoodVINS After Reobserve " + i + ": " + ekf.getCurrDevicePose().toString());
+			double observedDistance = 10 - i;
+			double observedHeading = 0;
+			ekf.updateFromReobservedFeatureThroughDistanceHeading(0, observedDistance, observedHeading);
+
+			Log.d(TAG, "TestBadINSGoodVINS After Reobserve " + i + ": " + ekf.getCurrDevicePose().toString()
+					+ " with observedDistance = " + observedDistance + " and observedHeading = " + observedHeading);
 		}
 
 		double errorWithEKF = correctCoords.computeDistanceTo(ekf.getDeviceCoords());
@@ -197,9 +201,9 @@ public class EKFTests extends AndroidTestCase {
 
 		// Log expected error w/o VINS, w/ VINS, and the improvement with VINS
 		// over pure INS
-		Log.d(TAG, "TestBadINSGoodVINS Actual Error X = " + errorWithoutEKF);
-		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Error: x = " + errorWithEKF);
-		Log.d(TAG, "TestBadINSGoodVINS INS+VINS Improvement: x = " + improvement);
+		Log.d(TAG, "TestBadINSGoodVINS Without EKF Error X = " + errorWithoutEKF);
+		Log.d(TAG, "TestBadINSGoodVINS With EKF Error: x = " + errorWithEKF);
+		Log.d(TAG, "TestBadINSGoodVINS With EKF Improvement: x = " + improvement);
 
 		// Improvements should be positive to mean that VINS affected the
 		// estimates positively
