@@ -116,25 +116,25 @@ public class DriverActivity extends Activity implements SensorEventListener, Fea
 
 			start = System.currentTimeMillis();
 			/* LOOP THROUGH THE RETURNED FEATURES */
-/*
-			 IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex) 
+
+			/* IF OLD FEATURE TYPE, CALL EKF.removeFeature(featureIndex)*/ 
 			Collections.reverse(update.getBadPointsIndex());
 			for (Integer index : update.getBadPointsIndex())
 				ekf.deleteFeature(index);
 
 			
-			 * IF RE-OBSERVED FEATURE, CALL
+			/* IF RE-OBSERVED FEATURE, CALL
 			 * EKF.updateReobservedFeature(featureIndex, observedDistance,
 			 * observedHeading)
-			 
+			 */
 			int i = 0;
 			for (PointDouble featpos : update.getCurrentPoints())
 				ekf.updateFromReobservedFeature(i++, featpos.getX(), featpos.getY());
 
-			 IF NEW FEATURE, CALL EKF.addFeature(x, y) 
+			/* IF NEW FEATURE, CALL EKF.addFeature(x, y) */ 
 			for (PointDouble featpos : update.getNewPoints())
 				ekf.addFeature(featpos.getX(), featpos.getY());
-*/
+
 			timeStringBuilder.append("EKF took: " + (System.currentTimeMillis() - start) + "ms\n");
 			timeStringBuilder.append("Features to Delete: " + update.getBadPointsIndex().size()
 					+ "\nFeatures to Update: " + update.getCurrentPoints().size() + "\nFeatures to Add: "

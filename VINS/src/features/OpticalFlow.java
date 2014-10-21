@@ -35,6 +35,7 @@ class OpticalFlow {
 		List<Point> nearFeaturesList = new ArrayList<>();
 		
 		boolean hasCurrent = false;
+		double currentSize = checkpointFeatures.size().height;
 		
 		if (checkpointFeatures.size().height > 0) {
 			hasCurrent = true;
@@ -62,7 +63,6 @@ class OpticalFlow {
 		
 		//// Near frame to far frame
 		
-		double currentSize = nearFeatures.size().height;
 		nearFeatures.push_back(nearNewFeatures);
 		nearFeaturesList = nearFeatures.toList(); 
 		
@@ -88,26 +88,28 @@ class OpticalFlow {
 			cpNearStatusList = cpNearStatus.toList();
 		}
 		
-		for (Byte firstStatus : nearFarStatus.toList()) {
-			boolean isGood = false;
-			if (index < currentSize) {
-				Byte secondStatus = cpNearStatusList.get(index);
-				if ((firstStatus.intValue() & secondStatus.intValue()) == 1) {  
-					isGood = true;
+		if (nearFarStatus.size().height > 0) {
+			for (Byte firstStatus : nearFarStatus.toList()) {
+				boolean isGood = false;
+				if (index < currentSize) {
+					Byte secondStatus = cpNearStatusList.get(index);
+					if ((firstStatus.intValue() & secondStatus.intValue()) == 1) {  
+						isGood = true;
+					} else {
+						badPointsIndex.add(Integer.valueOf(index));
+					}
 				} else {
-					badPointsIndex.add(Integer.valueOf(index));
+					isGood = true;
 				}
-			} else {
-				isGood = true;
+				
+				if (isGood) {
+					goodNearFeaturesList.add( nearFeaturesList.get(index) );
+					goodFarFeaturesList.add( farFeaturesList.get(index) );
+				} 
+				index++;
 			}
-			
-			if (isGood) {
-				goodNearFeaturesList.add( nearFeaturesList.get(index) );
-				goodFarFeaturesList.add( farFeaturesList.get(index) );
-			} 
-			index++;
 		}
-			
+		
 		MatOfPoint2f goodNearFeatures = new MatOfPoint2f();
 		MatOfPoint2f goodFarFeatures = new MatOfPoint2f();
 		goodNearFeatures.fromList(goodNearFeaturesList);

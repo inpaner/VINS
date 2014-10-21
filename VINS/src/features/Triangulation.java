@@ -166,7 +166,7 @@ public class Triangulation {
 		List<PointDouble> new2d = new ArrayList<>();
 		for (int i = 0; i < leftFeatures.height(); i++) {
 			double x = points4D.get(0, i)[0] * metricScale / points4D.get(3, i)[0];
-			double y = points4D.get(1, i)[0] * metricScale / points4D.get(3, i)[0];
+			double y = points4D.get(2, i)[0] * metricScale / points4D.get(3, i)[0];
 
 			PointDouble point = new PointDouble(x, y);
 			if (i < currentSize) {
