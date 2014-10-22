@@ -189,7 +189,12 @@ public class EKFTests extends AndroidTestCase {
 
 			double observedDistance = 10 - i;
 			double observedHeading = 0;
-			ekf.updateFromReobservedFeatureThroughDistanceHeading(0, observedDistance, observedHeading);
+
+			ekf.updateFromReobservedFeatureCoords(0, ekf.getDeviceCoords().getX(), ekf.getDeviceCoords().getY()
+					+ observedDistance);
+
+			// ekf.updateFromReobservedFeatureThroughDistanceHeading(0,
+			// observedDistance, observedHeading);
 
 			Log.d(TAG, "TestBadINSGoodVINS After Reobserve " + i + ": " + ekf.getCurrDevicePose().toString()
 					+ " with observedDistance = " + observedDistance + " and observedHeading = " + observedHeading);
