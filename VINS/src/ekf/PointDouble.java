@@ -44,7 +44,7 @@ public class PointDouble {
 		// angle is only from -90 to 90, so have to adjust if the other point is
 		// to the left of this point
 
-		if (other.x < x)
+		if (other.x <= x)
 			angle += Math.PI;
 
 		return angle;
