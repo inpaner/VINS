@@ -74,18 +74,6 @@ public class Triangulation {
 		distCoeffs.put(4, 0, 0.6936210153459164);
 	}
 
-	private void init1080() {
-		cameraMatrix.put(0, 0, 1768.104971372035, 0, 959.5);
-		cameraMatrix.put(1, 0, 0, 1768.104971372035, 539.5);
-		cameraMatrix.put(2, 0, 0, 0, 1);
-
-		distCoeffs.put(0, 0, 0.1880897270445046);
-		distCoeffs.put(1, 0, -0.7348187497379466);
-		distCoeffs.put(2, 0, 0);
-		distCoeffs.put(3, 0, 0);
-		distCoeffs.put(4, 0, 0.6936210153459164);
-	}
-
 	TriangulationResult triangulate(DevicePose devicePose, MatOfPoint2f leftFeatures, MatOfPoint2f rightFeatures, double currentSize) {
 		// TODO: might want to initialize points4D with a large Nx4 Array
 		// so that both memory and time will be saved (instead of

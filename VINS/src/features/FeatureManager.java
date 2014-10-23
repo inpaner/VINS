@@ -116,6 +116,10 @@ public class FeatureManager implements CvCameraViewListener2 {
 		
 		// Delay
 		
+		// Rotate 90 deg CCW
+		currentImage = currentImage.t();
+		Core.flip(currentImage.clone(), currentImage, 0);
+		
 		if (!framesReady) {
 			Mat toAdd = new Mat();
 			currentImage.copyTo(toAdd);
