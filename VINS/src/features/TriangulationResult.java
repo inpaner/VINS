@@ -20,6 +20,4 @@ class TriangulationResult {
 	public List<PointDouble> getNewFeatures() {
 		return newFeatures;
 	}
-	
-	
 }

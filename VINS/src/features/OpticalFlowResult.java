@@ -38,5 +38,4 @@ class OpticalFlowResult {
 	boolean isNotEmpty() {
 		return !nearFeatures.empty() && !farFeatures.empty();
 	}
-	
 }

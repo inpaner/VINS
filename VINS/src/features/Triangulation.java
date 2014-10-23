@@ -22,12 +22,12 @@ public class Triangulation {
 	private Mat F, E, W;
 	private Mat u, w, vt;
 	private Mat nullMatF, tempMat, RotW, RotFinal;
-	
+
 	Triangulation() {
 		nullMatF = Mat.zeros(0, 0, CvType.CV_64F);
 		initRectifyVariables();
 	}
-	
+
 	private void initRectifyVariables() {
 		// INITIALIZATION FOR STEREORECTIFY()
 
@@ -35,15 +35,11 @@ public class Triangulation {
 
 		cameraMatrix = Mat.zeros(3, 3, CvType.CV_64F);
 		distCoeffs = Mat.zeros(5, 1, CvType.CV_64F);
-		imageSize = new Size(1920, 1080);
+		imageSize = new Size(240, 320);
 		Rot = Mat.zeros(3, 3, CvType.CV_64F);
 		T = Mat.ones(3, 1, CvType.CV_64F);
 
-		init320();
-		
-		Rot.put(0, 0, 1, 0, 0);
-		Rot.put(1, 0, 0, 1, 0);
-		Rot.put(2, 0, 0, 0, 1);
+		init240x320();
 
 		// Output Variables
 
@@ -53,11 +49,10 @@ public class Triangulation {
 		P2 = Mat.zeros(3, 4, CvType.CV_64F);
 		Q = Mat.zeros(4, 4, CvType.CV_64F);
 	}
-	
-	
-	private void init320() {
-		cameraMatrix.put(0, 0, 287.484405747163, 0, 159.5);
-		cameraMatrix.put(1, 0, 0, 287.484405747163, 119.5);
+
+	private void init240x320() {
+		cameraMatrix.put(0, 0, 287.484405747163, 0, 119.5);
+		cameraMatrix.put(1, 0, 0, 287.484405747163, 159.5);
 		cameraMatrix.put(2, 0, 0, 0, 1);
 
 		distCoeffs.put(0, 0, 0.1831508618865668);
@@ -65,29 +60,37 @@ public class Triangulation {
 		distCoeffs.put(2, 0, 0);
 		distCoeffs.put(3, 0, 0);
 		distCoeffs.put(4, 0, 1.067914298622483);
-
 	}
 
-	
-	private void init1080() {
-		cameraMatrix.put(0, 0, 1768.104971372035, 0, 959.5);
-		cameraMatrix.put(1, 0, 0, 1768.104971372035, 539.5);
+	private void init1080x1920() {
+		cameraMatrix.put(0, 0, 1768.104971372035, 0, 539.5);
+		cameraMatrix.put(1, 0, 0, 1768.104971372035, 959.5);
 		cameraMatrix.put(2, 0, 0, 0, 1);
-		
+
 		distCoeffs.put(0, 0, 0.1880897270445046);
 		distCoeffs.put(1, 0, -0.7348187497379466);
 		distCoeffs.put(2, 0, 0);
 		distCoeffs.put(3, 0, 0);
 		distCoeffs.put(4, 0, 0.6936210153459164);
 	}
-	
-	
+
+	private void init1080() {
+		cameraMatrix.put(0, 0, 1768.104971372035, 0, 959.5);
+		cameraMatrix.put(1, 0, 0, 1768.104971372035, 539.5);
+		cameraMatrix.put(2, 0, 0, 0, 1);
+
+		distCoeffs.put(0, 0, 0.1880897270445046);
+		distCoeffs.put(1, 0, -0.7348187497379466);
+		distCoeffs.put(2, 0, 0);
+		distCoeffs.put(3, 0, 0);
+		distCoeffs.put(4, 0, 0.6936210153459164);
+	}
+
 	TriangulationResult triangulate(DevicePose devicePose, MatOfPoint2f leftFeatures, MatOfPoint2f rightFeatures, double currentSize) {
 		// TODO: might want to initialize points4D with a large Nx4 Array
 		// so that both memory and time will be saved (instead of
 		// reallocation each time)
 
-		
 		// Solving for Rotation and Translation Matrices
 
 		// Obtaining the Fundamental Matrix
@@ -112,7 +115,8 @@ public class Triangulation {
 		w = nullMatF.clone();
 		vt = nullMatF.clone();
 
-		// Decomposing Essential Matrix to obtain Rotation and Translation Matrices
+		// Decomposing Essential Matrix to obtain Rotation and Translation
+		// Matrices
 
 		Core.SVDecomp(E, w, u, vt);
 
@@ -142,22 +146,21 @@ public class Triangulation {
 		Core.gemm(RotW, Rot, 1, Mat.zeros(0, 0, CvType.CV_64F), 0, RotFinal);
 
 		points4D = Mat.zeros(1, 4, CvType.CV_64F);
-		Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), 
-				imageSize, RotFinal, T, R1, R2, P1, P2, Q);
+		Calib3d.stereoRectify(cameraMatrix, distCoeffs, cameraMatrix.clone(), distCoeffs.clone(), imageSize, RotFinal, T, R1, R2, P1, P2, Q);
 		Calib3d.triangulatePoints(P1, P2, leftFeatures, rightFeatures, points4D);
-		
+
 		double transPixel[] = T.t().get(0, 0);
-		double transMetric[] = {devicePose.get_xPos(), devicePose.get_yPos(), devicePose.get_zPos()};
+		double transMetric[] = { devicePose.get_xPos(), devicePose.get_yPos(), devicePose.get_zPos() };
 		double metricScale = 0;
-		
-		for(int i = 0; i < transPixel.length; ++i)
-			metricScale += transMetric[i]/transPixel[i];
+
+		for (int i = 0; i < transPixel.length; ++i)
+			metricScale += transMetric[i] / transPixel[i];
 		metricScale /= 3;
 
 		// TODO: maybe this method is more optimized??
 		// Mat points3D = new Mat();
-		// Calib3d.convertPointsFromHomogeneous(points4D, points3D);				
-		
+		// Calib3d.convertPointsFromHomogeneous(points4D, points3D);
+
 		// Log.i(TAG, "points4D size: " + points4D.size().width);
 		// Log.i(TAG, T.dump());
 		// Log.i(TAG, devicePose.toString());
@@ -175,7 +178,7 @@ public class Triangulation {
 				new2d.add(point);
 			}
 		}
-		
+
 		return new TriangulationResult(current2d, new2d);
 	}
 }
