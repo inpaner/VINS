@@ -6,11 +6,14 @@ import java.util.Calendar;
 public class DataLogger {
 	private static boolean logging = false;
 	private static FileWriter fw;
+	private static FileWriter consolidate;
 	
 	public static void startLogging(String prefix) {
 		try {
+			if (consolidate == null)
+				consolidate = new FileWriter("Consolidate_Log.txt");
 			if (fw == null)
-				fw = new FileWriter(prefix + "_Log_" + Calendar.getInstance().getTimeInMillis());
+				fw = new FileWriter(prefix + "_Log.txt");
 		} catch (IOException e) {
 
 			e.printStackTrace();
@@ -23,6 +26,7 @@ public class DataLogger {
 	public static void logData(DataObject data) {
 		try {
 			fw.append(Calendar.getInstance().getTimeInMillis() + " " + data);
+			consolidate.append(Calendar.getInstance().getTimeInMillis() + " " + data);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -35,6 +39,8 @@ public class DataLogger {
 		try {
 			fw.flush();
 			fw.close();
+			
+			consolidate.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
